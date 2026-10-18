@@ -1,0 +1,11 @@
+{
+  "ref": "demo",
+  "commit": {
+    "sha": "ad87e7d16ba3e32d5527166a81a47db41f3a56ba",
+    "shortId": "ad87e7d1",
+    "title": "Merge branch 'XXXXX-3602-main' into 'demo'"
+  },
+  "job": {
+    "finishedAt": "2026-10-16T16:02:37Z"
+  }
+}

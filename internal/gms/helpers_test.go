@@ -2,9 +2,15 @@ package gms
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -12,59 +18,170 @@ import (
 
 const host = "gitlab.example.com"
 
-// glabResponses сопоставляет аргументы вызова glab с файлом заготовки в testdata.
-type glabResponses map[string]string
-
-func deploymentsCall(project, env string) string {
-	return "api --hostname " + host + " projects/" + project +
-		"/deployments?environment=" + env + "&status=success&order_by=finished_at&sort=desc&per_page=1"
+// fakeProject — проект в фейковом GitLab.
+type fakeProject struct {
+	// host — хост GitLab проекта: на запрос к другому хосту фейк отвечает, что проекта нет. "" — любой хост.
+	host string
+	// deployments: окружение → заготовка узла lastDeployment, "" — окружение есть, но успешных деплоев нет.
+	// Окружения без ключа в GitLab нет.
+	deployments map[string]string
+	// versions: sha коммита → заготовка application.version. Для sha без ключа файла на коммите нет.
+	versions map[string]string
 }
 
-func versionCall(project, sha string) string {
-	return "api --hostname " + host + " projects/" + project +
-		"/repository/files/application.version/raw?ref=" + sha
+// fakeGitLab — проекты фейкового GitLab по пути проекта. Проекта без ключа нет.
+type fakeGitLab map[string]fakeProject
+
+// testGitLab — group/project2 и group/project1, ответы GraphQL сняты 2026-10-18.
+// У окружений project2 один коммит деплоя, у окружений project1 разные.
+var testGitLab = fakeGitLab{
+	"group/project2": {
+		deployments: map[string]string{
+			"dev":  "project2/last-deployment-dev.json",
+			"demo": "project2/last-deployment-demo.json",
+			"prod": "project2/last-deployment-prod.json",
+		},
+		versions: map[string]string{
+			"1abfac438a0c3ad915d9525a4d2e4616e59007f8": "project2/application.version-1abfac43",
+		},
+	},
+	"group/project1": {
+		deployments: map[string]string{
+			"dev":  "project1/last-deployment-dev.json",
+			"demo": "project1/last-deployment-demo.json",
+			"prod": "project1/last-deployment-prod.json",
+		},
+		versions: map[string]string{
+			"f81c7da43b3023ff00d8bfb0bc3e7740401776e7": "project1/application.version-f81c7da4",
+			"ad87e7d16ba3e32d5527166a81a47db41f3a56ba": "project1/application.version-ad87e7d1",
+			"eb9aad5ddd8d1e2912453039c2e57450d9ad070d": "project1/application.version-eb9aad5d",
+		},
+	},
 }
 
-// project2Responses — ответы GitLab для group/project2, снятые 2026-10-18.
-var project2Responses = glabResponses{
-	deploymentsCall("group%2Fproject2", "dev"):                                  "project2/deployments-dev.json",
-	deploymentsCall("group%2Fproject2", "demo"):                                 "project2/deployments-demo.json",
-	deploymentsCall("group%2Fproject2", "prod"):                                 "project2/deployments-prod.json",
-	versionCall("group%2Fproject2", "1abfac438a0c3ad915d9525a4d2e4616e59007f8"): "project2/application.version-1abfac43",
+const project2SHA = "1abfac438a0c3ad915d9525a4d2e4616e59007f8"
+
+// withDeployment возвращает копию gl, в которой у окружения env проекта path заготовка lastDeployment fixture.
+func (gl fakeGitLab) withDeployment(path, env, fixture string) fakeGitLab {
+	gl = maps.Clone(gl)
+	p := gl[path]
+	p.deployments = maps.Clone(p.deployments)
+	p.deployments[env] = fixture
+	gl[path] = p
+	return gl
 }
 
-// project1Responses — ответы GitLab для group/project1, снятые 2026-10-18. У окружений разные коммиты деплоя.
-var project1Responses = glabResponses{
-	deploymentsCall("group%2Fproject1", "dev"):                                  "project1/deployments-dev.json",
-	deploymentsCall("group%2Fproject1", "demo"):                                 "project1/deployments-demo.json",
-	deploymentsCall("group%2Fproject1", "prod"):                                 "project1/deployments-prod.json",
-	versionCall("group%2Fproject1", "f81c7da43b3023ff00d8bfb0bc3e7740401776e7"): "project1/application.version-f81c7da4",
-	versionCall("group%2Fproject1", "ad87e7d16ba3e32d5527166a81a47db41f3a56ba"): "project1/application.version-ad87e7d1",
-	versionCall("group%2Fproject1", "eb9aad5ddd8d1e2912453039c2e57450d9ad070d"): "project1/application.version-eb9aad5d",
+// withVersion возвращает копию gl, в которой у проекта path на коммите sha заготовка application.version fixture.
+func (gl fakeGitLab) withVersion(path, sha, fixture string) fakeGitLab {
+	gl = maps.Clone(gl)
+	p := gl[path]
+	p.versions = maps.Clone(p.versions)
+	p.versions[sha] = fixture
+	gl[path] = p
+	return gl
 }
 
-// glabErrors сопоставляет аргументы вызова glab с ошибкой, которую вернёт фейковый glab.
-type glabErrors map[string]error
+// onHost возвращает проект p, который есть только на хосте h.
+func onHost(p fakeProject, h string) fakeProject {
+	p.host = h
+	return p
+}
 
-// authCall — проверка входа glab в хост h. Без ошибки в glabErrors фейковый glab её проходит.
-func authCall(h string) string { return "auth status --hostname " + h }
+// glabFaults — сбои фейкового glab.
+type glabFaults struct {
+	deployments error    // ошибка каждого запроса текущих деплоев
+	versions    error    // ошибка каждого запроса версий
+	anonymous   []string // хосты, в которые glab не вошёл: GitLab отвечает без текущего пользователя
+	// notInstalled: glab не установлен, любой вызов завершается ошибкой с exec.ErrNotFound.
+	notInstalled bool
+	// nullData: GitLab отвечает на каждый запрос {"data": null}, а glab завершается без ошибки.
+	nullData bool
+}
 
-func fakeGlab(t *testing.T, r glabResponses, errs glabErrors) func(args ...string) ([]byte, error) {
+// graphqlField — поле запроса с алиасом, которое понимает фейковый GitLab: project, environment или blobs.
+var graphqlField = regexp.MustCompile(
+	`(\w+):\s*(project\(fullPath|environment\(name|repository\s*\{\s*blobs\(ref):\s*"([^"]*)"`)
+
+// fakeGlab отвечает на glab api graphql данными gl, как ответил бы GitLab: несуществующий проект
+// или окружение — null, коммит без файла — пустой список blobs. Любой другой вызов glab роняет тест.
+func fakeGlab(t *testing.T, gl fakeGitLab, faults glabFaults) func(args ...string) ([]byte, error) {
 	return func(args ...string) ([]byte, error) {
-		key := strings.Join(args, " ")
-		if err, ok := errs[key]; ok {
-			return nil, err
+		if faults.notInstalled {
+			return nil, fmt.Errorf("exec: \"glab\": %w", exec.ErrNotFound)
 		}
-		if strings.HasPrefix(key, authCall("")) {
-			return nil, nil
-		}
-		fixture, ok := r[key]
+		query, ok := graphqlQuery(args)
 		if !ok {
-			t.Errorf("неожиданный вызов glab: %s", key)
-			return nil, errors.New("404 Not Found")
+			t.Errorf("неожиданный вызов glab: %s", strings.Join(args, " "))
+			return nil, errors.New("неожиданный вызов glab")
 		}
-		return os.ReadFile(filepath.Join("testdata", fixture))
+		switch {
+		case strings.Contains(query, "environment(") && faults.deployments != nil:
+			return nil, faults.deployments
+		case strings.Contains(query, "blobs(") && faults.versions != nil:
+			return nil, faults.versions
+		}
+		if faults.nullData {
+			return []byte(`{"data": null}`), nil
+		}
+		data := map[string]any{}
+		if strings.Contains(query, "currentUser") {
+			data["currentUser"] = map[string]any{"username": "tester"}
+			if slices.Contains(faults.anonymous, args[2]) {
+				data["currentUser"] = nil
+			}
+		}
+		var project map[string]any // поля текущего проекта запроса, nil — проекта нет
+		var fp fakeProject
+		for _, m := range graphqlField.FindAllStringSubmatch(query, -1) {
+			alias, field, arg := m[1], m[2], m[3]
+			switch {
+			case strings.HasPrefix(field, "project"):
+				var found bool
+				if fp, found = gl[arg]; found && (fp.host == "" || fp.host == args[2]) {
+					project = map[string]any{}
+					data[alias] = project
+				} else {
+					project = nil
+					data[alias] = nil
+				}
+			case project == nil:
+			case strings.HasPrefix(field, "environment"):
+				fixture, found := fp.deployments[arg]
+				switch {
+				case !found:
+					project[alias] = nil
+				case fixture == "":
+					project[alias] = map[string]any{"lastDeployment": nil}
+				default:
+					project[alias] = map[string]any{"lastDeployment": json.RawMessage(readFixture(t, fixture))}
+				}
+			default:
+				nodes := []any{}
+				if fixture, found := fp.versions[arg]; found {
+					nodes = append(nodes, map[string]any{"rawBlob": string(readFixture(t, fixture))})
+				}
+				project[alias] = map[string]any{"blobs": map[string]any{"nodes": nodes}}
+			}
+		}
+		return json.Marshal(map[string]any{"data": data})
 	}
+}
+
+// graphqlQuery возвращает запрос из вызова glab api --hostname <хост> graphql -f query=<запрос>.
+func graphqlQuery(args []string) (string, bool) {
+	if len(args) != 6 || args[0] != "api" || args[1] != "--hostname" || args[3] != "graphql" || args[4] != "-f" {
+		return "", false
+	}
+	return strings.CutPrefix(args[5], "query=")
+}
+
+// readFixture читает заготовку из testdata. Её вызывает glab из горутин gms, поэтому ошибка не останавливает тест.
+func readFixture(t *testing.T, name string) []byte {
+	b, err := os.ReadFile(filepath.Join("testdata", name))
+	if err != nil {
+		t.Error(err)
+	}
+	return b
 }
 
 func writeConfig(t *testing.T, content string) string {
@@ -125,10 +242,10 @@ func configEnv(t *testing.T, config string) map[string]string {
 }
 
 // assertRun запускает gms с конфигом config и фейковым glab и проверяет код выхода, stdout и stderr.
-func assertRun(t *testing.T, config string, glab glabResponses, errs glabErrors, args []string,
+func assertRun(t *testing.T, config string, gl fakeGitLab, faults glabFaults, args []string,
 	wantCode int, wantStdout, wantStderr string) {
 	t.Helper()
-	code, stdout, stderr := runWithEnv(t, configEnv(t, config), fakeGlab(t, glab, errs), args)
+	code, stdout, stderr := runWithEnv(t, configEnv(t, config), fakeGlab(t, gl, faults), args)
 	assertResult(t, code, stdout, stderr, wantCode, wantStdout, wantStderr)
 }
 
@@ -147,20 +264,9 @@ func assertResult(t *testing.T, code int, stdout, stderr string, wantCode int, w
 }
 
 // assertOutput запускает gms с конфигом config и фейковым glab и проверяет успешный вывод want.
-func assertOutput(t *testing.T, config string, glab glabResponses, args []string, want string) {
+func assertOutput(t *testing.T, config string, gl fakeGitLab, args []string, want string) {
 	t.Helper()
-	assertRun(t, config, glab, nil, args, 0, want, "")
-}
-
-// mergeResponses объединяет заготовки ответов нескольких проектов.
-func mergeResponses(rs ...glabResponses) glabResponses {
-	all := glabResponses{}
-	for _, r := range rs {
-		for k, v := range r {
-			all[k] = v
-		}
-	}
-	return all
+	assertRun(t, config, gl, glabFaults{}, args, 0, want, "")
 }
 
 // twoProjectsConfig — project2 и project1 по одному окружению, project2 в файле первым.
