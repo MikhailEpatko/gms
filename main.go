@@ -9,13 +9,14 @@ import (
 	"strings"
 	"time"
 
-	"gms/internal/gms"
+	"github.com/MikhailEpatko/gms/internal/gms"
 )
 
 func main() {
 	os.Exit(gms.Run(os.Args[1:], gms.Deps{
 		Glab:     runGlab,
 		Getenv:   os.Getenv,
+		HomeDir:  os.UserHomeDir,
 		Stdout:   os.Stdout,
 		Stderr:   os.Stderr,
 		Location: time.Local,

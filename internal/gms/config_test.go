@@ -59,13 +59,13 @@ func TestRunExampleConfigIsValid(t *testing.T) {
 	assertResult(t, code, stdout, stderr, 2, "", "gms: неизвестный код проекта: foo\nизвестные коды: project1, project2\n")
 }
 
-// TestRunNeedsHomeWithoutGmsConfig проверяет, что без HOME и GMS_CONFIG путь к конфигу не строится
-// относительно текущего каталога.
+// TestRunNeedsHomeWithoutGmsConfig проверяет, что без GMS_CONFIG, HOME и домашнего каталога ОС путь к конфигу
+// не строится относительно текущего каталога.
 func TestRunNeedsHomeWithoutGmsConfig(t *testing.T) {
 	for _, args := range [][]string{nil, {"-c"}} {
 		t.Run(fmt.Sprint(args), func(t *testing.T) {
 			code, stdout, stderr := runWithEnv(t, nil, forbiddenGlab(t), args)
-			assertResult(t, code, stdout, stderr, 1, "", "gms: не задан HOME, укажите путь к конфигу в GMS_CONFIG\n")
+			assertResult(t, code, stdout, stderr, 1, "", "gms: не удалось определить домашний каталог, укажите путь к конфигу в GMS_CONFIG\n")
 		})
 	}
 }

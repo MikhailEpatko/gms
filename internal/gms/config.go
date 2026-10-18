@@ -27,15 +27,19 @@ type Environment struct {
 	Branch      string // ветка окружения
 }
 
-// configPath возвращает путь к конфигу: из GMS_CONFIG, а без неё — в домашнем каталоге.
-func configPath(getenv func(string) string) (string, error) {
+// configPath возвращает путь к конфигу: из GMS_CONFIG, а без неё — в домашнем каталоге из HOME или,
+// если HOME не задан, из homeDir.
+func configPath(getenv func(string) string, homeDir func() (string, error)) (string, error) {
 	if p := getenv("GMS_CONFIG"); p != "" {
 		return p, nil
 	}
 	home := getenv("HOME")
 	if home == "" {
+		home, _ = homeDir()
+	}
+	if home == "" {
 		// Иначе путь стал бы относительным и зависел от текущего каталога.
-		return "", errors.New("не задан HOME, укажите путь к конфигу в GMS_CONFIG")
+		return "", errors.New("не удалось определить домашний каталог, укажите путь к конфигу в GMS_CONFIG")
 	}
 	return filepath.Join(home, ".config", "gms", "config.json"), nil
 }

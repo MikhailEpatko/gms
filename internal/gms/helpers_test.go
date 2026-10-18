@@ -100,11 +100,22 @@ func runWithEnv(t *testing.T, env map[string]string, glab func(args ...string) (
 	code := Run(args, Deps{
 		Glab:     glab,
 		Getenv:   func(k string) string { return env[k] },
+		HomeDir:  fakeHomeDir(env),
 		Stdout:   &stdout,
 		Stderr:   &stderr,
 		Location: moscow(t),
 	})
 	return code, stdout.String(), stderr.String()
+}
+
+// fakeHomeDir ведёт себя как os.UserHomeDir в Windows: домашний каталог берётся из USERPROFILE.
+func fakeHomeDir(env map[string]string) func() (string, error) {
+	return func() (string, error) {
+		if h := env["USERPROFILE"]; h != "" {
+			return h, nil
+		}
+		return "", errors.New("USERPROFILE не задан")
+	}
 }
 
 // configEnv возвращает переменные окружения gms с конфигом config во временном файле.
