@@ -8,21 +8,21 @@ func TestRunShowsCurrentDeploymentOfProject(t *testing.T) {
 	tests := []struct {
 		name   string
 		config string
-		glab   glabResponses
+		gl     fakeGitLab
 		args   []string
 		want   string
 	}{
 		{
 			name:   "одно окружение",
 			config: project2DevConfig,
-			glab:   project2Responses,
+			gl:     testGitLab,
 			args:   []string{"-p", "project2"},
 			want:   project2Dev,
 		},
 		{
 			name:   "окружения разделены линией",
 			config: project2AllConfig,
-			glab:   project2Responses,
+			gl:     testGitLab,
 			args:   []string{"-p", "project2"},
 			want:   project2All,
 		},
@@ -38,20 +38,36 @@ func TestRunShowsCurrentDeploymentOfProject(t *testing.T) {
     "DEMO": "https://gitlab.example.com/group/project1/-/tree/demo"
   }
 }`,
-			glab: project1Responses,
+			gl:   testGitLab,
 			args: []string{"-p", "project1"},
 			want: "project1\n" + project1ProdBlock + envSep + project1DevBlock + envSep + project1DemoBlock,
+		},
+		{
+			name: "проекты на разных хостах",
+			config: `{
+  "project2": {
+    "DEV": "https://gitlab.example.com/group/project2/-/tree/dev"
+  },
+  "project1": {
+    "DEV": "https://gitlab.example.org/group/project1/-/tree/dev"
+  }
+}`,
+			gl: fakeGitLab{
+				"group/project2": onHost(testGitLab["group/project2"], "gitlab.example.com"),
+				"group/project1": onHost(testGitLab["group/project1"], "gitlab.example.org"),
+			},
+			want: project2Dev + projectSep + project1Dev,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assertOutput(t, tt.config, tt.glab, tt.args, tt.want)
+			assertOutput(t, tt.config, tt.gl, tt.args, tt.want)
 		})
 	}
 }
 
-// Заготовки в testdata/synthetic не сняты с GitLab: deployments-mr, deployments-mr-merge и deployments-ci —
-// это project2/deployments-dev.json с подменённым ref, deployments-empty — пустой ответ Deployments API.
+// Заготовки в testdata/synthetic не сняты с GitLab: last-deployment-mr, last-deployment-mr-merge и last-deployment-ci —
+// это project2/last-deployment-dev.json с подменённым ref.
 func TestRunMarksDeploymentRef(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -60,7 +76,7 @@ func TestRunMarksDeploymentRef(t *testing.T) {
 	}{
 		{
 			name:    "деплой из MR",
-			fixture: "synthetic/deployments-mr.json",
+			fixture: "synthetic/last-deployment-mr.json",
 			want: `project2
 DEV:
 2026-09-24 16:35:33 MSK (MR !23)
@@ -70,7 +86,7 @@ DEV:
 		},
 		{
 			name:    "деплой из merged results pipeline MR",
-			fixture: "synthetic/deployments-mr-merge.json",
+			fixture: "synthetic/last-deployment-mr-merge.json",
 			want: `project2
 DEV:
 2026-09-24 16:35:33 MSK (MR !23)
@@ -80,7 +96,7 @@ DEV:
 		},
 		{
 			name:    "деплой из чужой ветки",
-			fixture: "synthetic/deployments-ci.json",
+			fixture: "synthetic/last-deployment-ci.json",
 			want: `project2
 DEV:
 2026-09-24 16:35:33 MSK (ветка: ci)
@@ -91,23 +107,30 @@ DEV:
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			glab := mergeResponses(project2Responses, glabResponses{
-				deploymentsCall("group%2Fproject2", "dev"): tt.fixture,
-			})
-			assertOutput(t, project2DevConfig, glab, []string{"-p", "project2"}, tt.want)
+			gl := testGitLab.withDeployment("group/project2", "dev", tt.fixture)
+			assertOutput(t, project2DevConfig, gl, []string{"-p", "project2"}, tt.want)
 		})
 	}
 }
 
 func TestRunShowsNoDeployments(t *testing.T) {
+	// У DEV нет успешных деплоев.
+	noDevDeployments := testGitLab.withDeployment("group/project2", "dev", "")
+	// Окружения DEV в GitLab нет.
+	noDevEnvironment := fakeGitLab{"group/project2": {
+		deployments: map[string]string{"demo": "project2/last-deployment-demo.json"},
+		versions:    testGitLab["group/project2"].versions,
+	}}
 	tests := []struct {
 		name   string
 		config string
+		gl     fakeGitLab
 		want   string
 	}{
 		{
 			name:   "единственное окружение",
 			config: project2DevConfig,
+			gl:     noDevDeployments,
 			want: `project2
 DEV:
 нет деплоев
@@ -121,20 +144,24 @@ DEV:
     "DEV": "https://gitlab.example.com/group/project2/-/tree/dev"
   }
 }`,
+			gl: noDevDeployments,
 			want: "project2\n" + project2DemoBlock + envSep + `DEV:
+нет деплоев
+`,
+		},
+		{
+			name:   "окружения нет в GitLab",
+			config: project2DevConfig,
+			gl:     noDevEnvironment,
+			want: `project2
+DEV:
 нет деплоев
 `,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Запроса версии DEV в ответах нет: если он будет выполнен, fakeGlab уронит тест.
-			glab := glabResponses{
-				deploymentsCall("group%2Fproject2", "demo"):                                 "project2/deployments-demo.json",
-				deploymentsCall("group%2Fproject2", "dev"):                                  "synthetic/deployments-empty.json",
-				versionCall("group%2Fproject2", "1abfac438a0c3ad915d9525a4d2e4616e59007f8"): "project2/application.version-1abfac43",
-			}
-			assertOutput(t, tt.config, glab, []string{"-p", "project2"}, tt.want)
+			assertOutput(t, tt.config, tt.gl, []string{"-p", "project2"}, tt.want)
 		})
 	}
 }

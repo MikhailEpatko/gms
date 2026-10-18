@@ -134,14 +134,13 @@ func (r reporter) unknownCodes(projects []Project, unknown []string) {
 	fmt.Fprintf(r.w, "gms: %s: %s\nизвестные коды: %s\n", label, strings.Join(unknown, ", "), strings.Join(known, ", "))
 }
 
-// glabUnusable сообщает, что glab не прошёл проверку входа в host с ошибкой err, и подсказывает, как это исправить.
+// glabUnusable сообщает, что glab не установлен или GitLab host ответил ему анонимно (err), и подсказывает, как это исправить.
 func (r reporter) glabUnusable(host string, err error) {
 	if errors.Is(err, exec.ErrNotFound) {
 		fmt.Fprintf(r.w, "gms: glab не найден, установите его: https://gitlab.com/gitlab-org/cli\n"+
 			"затем выполните: glab auth login --hostname %s\n", host)
 		return
 	}
-	// Причину glab показываем как есть: кроме отсутствия входа это бывает и сбой сети или прокси.
 	fmt.Fprintf(r.w, "gms: glab не прошёл проверку входа в %s: %v\n"+
 		"выполните: glab auth login --hostname %s\n", host, err, host)
 }

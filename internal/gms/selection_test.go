@@ -53,7 +53,7 @@ func TestRunSelectsProjects(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assertOutput(t, twoProjectsConfig, mergeResponses(project2Responses, project1Responses), tt.args, tt.want)
+			assertOutput(t, twoProjectsConfig, testGitLab, tt.args, tt.want)
 		})
 	}
 }

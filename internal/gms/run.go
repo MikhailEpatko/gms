@@ -10,7 +10,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -83,27 +82,19 @@ func Run(args []string, deps Deps) int {
 		rep.unknownCodes(projects, unknown)
 		return 2
 	}
-	gl := gitlab{glab: deps.Glab}
-	for _, host := range hosts(selected) {
-		if err := gl.checkAuth(host); err != nil {
-			rep.glabUnusable(host, err)
-			return 1
-		}
+	var envs []Environment // все пары в порядке вывода
+	for _, p := range selected {
+		envs = append(envs, p.Environments...)
 	}
-
-	// Пары независимы, поэтому запрашиваем их параллельно, а печатаем потом в порядке selected.
-	results := make([][]pairResult, len(selected))
-	var wg sync.WaitGroup
-	for i, p := range selected {
-		results[i] = make([]pairResult, len(p.Environments))
-		for j, env := range p.Environments {
-			wg.Go(func() { results[i][j] = gl.pair(env) })
-		}
+	results, err := gitlab{glab: deps.Glab}.pairs(envs)
+	if unusable, ok := errors.AsType[*unusableError](err); ok {
+		rep.glabUnusable(unusable.host, unusable.err)
+		return 1
 	}
-	wg.Wait()
 
 	f := formatter{w: deps.Stdout, loc: deps.Location}
 	failed := false // хотя бы одна пара завершилась ошибкой
+	k := 0          // индекс пары в results
 	for i, p := range selected {
 		if i > 0 {
 			f.projectSeparator()
@@ -113,8 +104,9 @@ func Run(args []string, deps Deps) int {
 			if j > 0 {
 				f.envSeparator()
 			}
-			f.pair(env, results[i][j])
-			failed = failed || results[i][j].failed()
+			f.pair(env, results[k])
+			failed = failed || results[k].failed()
+			k++
 		}
 	}
 	if failed {
@@ -184,17 +176,4 @@ func selectProjects(projects []Project, codes []string) (selected []Project, unk
 		selected = append(selected, projects[i])
 	}
 	return selected, unknown
-}
-
-// hosts возвращает хосты GitLab окружений projects без повторов, в порядке первого упоминания.
-func hosts(projects []Project) []string {
-	var hs []string
-	for _, p := range projects {
-		for _, env := range p.Environments {
-			if !slices.Contains(hs, env.Host) {
-				hs = append(hs, env.Host)
-			}
-		}
-	}
-	return hs
 }
