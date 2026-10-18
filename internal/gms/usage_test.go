@@ -18,6 +18,18 @@ func TestRunPrintsConfigPath(t *testing.T) {
 			want: "/home/dev/.config/gms/config.json\n",
 		},
 		{
+			name: "без HOME в домашнем каталоге ОС",
+			env:  map[string]string{"USERPROFILE": "/users/dev"},
+			args: []string{"-c"},
+			want: "/users/dev/.config/gms/config.json\n",
+		},
+		{
+			name: "HOME важнее домашнего каталога ОС",
+			env:  map[string]string{"HOME": "/home/dev", "USERPROFILE": "/users/dev"},
+			args: []string{"-c"},
+			want: "/home/dev/.config/gms/config.json\n",
+		},
+		{
 			name: "из GMS_CONFIG",
 			env:  map[string]string{"HOME": "/home/dev", "GMS_CONFIG": "/etc/gms.json"},
 			args: []string{"-c"},

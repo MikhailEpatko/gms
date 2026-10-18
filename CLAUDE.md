@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Состояние проекта
 
-Модуль `gms`, Go 1.27, сторонних зависимостей нет. Вся логика в `internal/gms` с точкой входа `Run(args, deps)`, `main.go` только подключает настоящий `glab`. Тесты разложены по областям поведения в `internal/gms/*_test.go`, общие хелперы и заготовки лежат в `helpers_test.go`.
+Модуль `github.com/MikhailEpatko/gms`, Go 1.27, сторонних зависимостей нет. Вся логика в `internal/gms` с точкой входа `Run(args, deps)`, `main.go` только подключает настоящий `glab`. Тесты разложены по областям поведения в `internal/gms/*_test.go`, общие хелперы и заготовки лежат в `helpers_test.go`.
 
 Источник требований: `ai/1/task.md`. Решения, принятые на grilling-сессии 2026-10-18, отменяют его в нескольких местах: формат `-p`, источник данных, версия на коммите деплоя. Эти решения описаны ниже, а также в `docs/adr/`. Термины берутся из `GLOSSARY.md`.
 
@@ -51,7 +51,7 @@ project1
 
 ### Конфиг
 
-Путь: `~/.config/gms/config.json`, переопределяется через env `GMS_CONFIG`. Если не заданы ни `HOME`, ни `GMS_CONFIG`, это ошибка, exit 1. JSON вида `{ "<код проекта>": { "<ОКРУЖЕНИЕ>": "<url ветки>" } }`, URL вида `https://gitlab.example.com/group/<repo>/-/tree/<branch>`. Из URL извлекаются хост, путь проекта в GitLab и ветка окружения. Окружения произвольные, берутся из ключей. Если файла нет, `gms` печатает «создайте ~/.config/gms/config.json» и пример конфига с обезличенными URL (`gitlab.example.com`), exit ≠ 0.
+Путь: `~/.config/gms/config.json`, переопределяется через env `GMS_CONFIG`. Домашний каталог берётся из `HOME`, а без него из `os.UserHomeDir()` (в Windows `%USERPROFILE%`). Если нет ни `GMS_CONFIG`, ни домашнего каталога, это ошибка, exit 1. JSON вида `{ "<код проекта>": { "<ОКРУЖЕНИЕ>": "<url ветки>" } }`, URL вида `https://gitlab.example.com/group/<repo>/-/tree/<branch>`. Из URL извлекаются хост, путь проекта в GitLab и ветка окружения. Окружения произвольные, берутся из ключей. Если файла нет, `gms` печатает «создайте ~/.config/gms/config.json» и пример конфига с обезличенными URL (`gitlab.example.com`), exit ≠ 0.
 
 ### Откуда берутся данные
 

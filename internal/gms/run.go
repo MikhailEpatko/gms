@@ -17,8 +17,10 @@ import (
 // Deps — внешние зависимости Run. Единственный seam для тестов.
 type Deps struct {
 	// Glab запускает glab: аргументы → stdout или ошибка. Если glab не найден, ошибка оборачивает exec.ErrNotFound.
-	Glab     func(args ...string) ([]byte, error)
-	Getenv   func(string) string
+	Glab   func(args ...string) ([]byte, error)
+	Getenv func(string) string
+	// HomeDir возвращает домашний каталог, когда HOME не задан, как в Windows (os.UserHomeDir).
+	HomeDir  func() (string, error)
 	Stdout   io.Writer
 	Stderr   io.Writer
 	Location *time.Location // часовой пояс вывода даты деплоя
@@ -28,7 +30,7 @@ type Deps struct {
 func Run(args []string, deps Deps) int {
 	rep := reporter{w: deps.Stderr}
 	if configRequested(args) {
-		path, err := configPath(deps.Getenv)
+		path, err := configPath(deps.Getenv, deps.HomeDir)
 		if err != nil {
 			rep.failure(err)
 			return 1
@@ -61,7 +63,7 @@ func Run(args []string, deps Deps) int {
 		return 2
 	}
 
-	path, err := configPath(deps.Getenv)
+	path, err := configPath(deps.Getenv, deps.HomeDir)
 	if err != nil {
 		rep.failure(err)
 		return 1
