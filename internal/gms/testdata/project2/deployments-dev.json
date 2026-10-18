@@ -1,0 +1,13 @@
+[
+  {
+    "ref": "dev",
+    "sha": "1abfac438a0c3ad915d9525a4d2e4616e59007f8",
+    "deployable": {
+      "finished_at": "2026-09-24T13:35:33.862Z",
+      "commit": {
+        "short_id": "1abfac43",
+        "title": "Merge branch 'XXXXX-3488' into 'dev'"
+      }
+    }
+  }
+]
