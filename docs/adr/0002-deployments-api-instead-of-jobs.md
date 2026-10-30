@@ -1,9 +1,10 @@
 # Deployments API вместо перебора jobs
 
-В `ai/1/task.md` дата деплоя ищется перебором jobs проекта (`refName`, `stage.name == deploy`, `status == SUCCESS`, максимум `finishedAt`), а версия читается с HEAD ветки. Мы отступили от спеки: во всех репозиториях deploy-jobs объявлены с `environment: name: dev|demo|prod`, поэтому текущий деплой берётся одним запросом к Deployments API (`environment=<окружение в нижнем регистре>`, `status=success`). Оттуда же берутся коммит деплоя (`sha`, `commit.title`) и дата (`deployable.finished_at`), а `application.version` читается на коммите деплоя.
+В `ai/1/task.md` дата деплоя ищется перебором jobs проекта (`refName`, `stage.name == deploy`, `status == SUCCESS`, максимум `finishedAt`), а версия читается с HEAD ветки. Мы отступили от спеки: во всех репозиториях deploy-jobs объявлены с `environment: name: dev|demo|prod`, поэтому текущий деплой берётся из деплоев окружения GitLab: последний успешный деплой окружения, имя которого совпадает с именем окружения из конфига в нижнем регистре. Сначала это был REST-запрос к Deployments API (`environment=<имя>`, `status=success`), теперь это поле GraphQL `environment(name: <имя>).lastDeployment(status: SUCCESS)` (ADR 0003). Оттуда же берутся коммит деплоя (`commit.sha`, `commit.shortId`, `commit.title`) и дата деплоя (`job.finishedAt`), а `application.version` читается на коммите деплоя.
 
 ## Consequences
 
-- Текущий деплой учитывается из любой ветки. В DEV регулярно деплоят из MR (ref `refs/merge-requests/<N>/head`), и такой деплой будет показан с пометкой `(MR !<N>)`, а не пропущен.
-- DEMO и PROD деплоятся вручную, поэтому HEAD ветки может опережать стенд. Версия, прочитанная на коммите деплоя, этого расхождения не даёт.
+- Текущий деплой учитывается из любой ветки. В DEV регулярно деплоят из MR (ref `refs/merge-requests/<N>/head`, у merged results pipeline `.../merge`), и такой деплой будет показан с пометкой `(MR !<N>)`, а не пропущен.
+- DEMO и PROD деплоятся вручную, поэтому HEAD ветки окружения может опережать текущий деплой. Версия, прочитанная на коммите деплоя, этого расхождения не даёт.
 - Если в CI какого-то проекта у deploy-job не будет `environment`, утилита покажет для него `нет деплоев`.
+- Имя окружения уходит в GitLab в нижнем регистре, поэтому от регистра имени в конфиге не зависит, какое окружение GitLab запрашивается: `DEV` и `dev` означают одно окружение GitLab `dev`. По той же причине `-e` сравнивает имена окружений без учёта регистра (`ai/2/spec.md`).

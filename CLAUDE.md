@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Модуль `github.com/MikhailEpatko/gms`, Go 1.27, сторонних зависимостей нет. Вся логика в `internal/gms` с точкой входа `Run(args, deps)`, `main.go` только подключает настоящий `glab`. Тесты разложены по областям поведения в `internal/gms/*_test.go`, общие хелперы и заготовки лежат в `helpers_test.go`.
 
-Источник требований: `ai/1/task.md`. Решения, принятые на grilling-сессии 2026-10-18, отменяют его в нескольких местах: формат `-p`, источник данных, версия на коммите деплоя. Эти решения описаны ниже, а также в `docs/adr/`. Флаг `-e` добавлен по `ai/2/task.md`, решения по нему собраны в `ai/2/spec.md`. Термины берутся из `GLOSSARY.md`.
+Задачи лежат в `ai/<N>/`, N — порядок выполнения: постановка в `task.md`, затем `spec.md` и `ticket-<M>.md`. Где спека расходится с `task.md`, верна спека. Поведение утилиты описано ниже, долговременные решения — в `docs/adr/`, термины — в `GLOSSARY.md`.
 
 ## Команды
 
@@ -75,4 +75,6 @@ project1
 
 ## Skills
 
-В `.claude/skills/` лежит набор инженерных skills (tdd, review, to-spec, to-tickets, implement и др., описание в `.claude/skills/README.md`). Ожидаемый процесс: spec → tickets → реализация через `/tdd` → `/review`.
+В `.claude/skills/` лежит набор инженерных skills (tdd, review, to-spec, to-tickets, implement и др., описание в `.claude/skills/README.md`). Ожидаемый процесс: `/grill-with-docs` → spec → tickets → реализация через `/tdd` → `/review`.
+
+Каждая задача, в том числе из `ai/<N>/task.md`, начинается с `/grill-with-docs`. Без него задача выполняется, только если пользователь явно так сказал.
