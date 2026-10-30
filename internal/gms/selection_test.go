@@ -1,6 +1,9 @@
 package gms
 
 import (
+	"cmp"
+	"slices"
+	"sync"
 	"testing"
 )
 
@@ -54,6 +57,138 @@ func TestRunSelectsProjects(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assertOutput(t, twoProjectsConfig, testGitLab, tt.args, tt.want)
+		})
+	}
+}
+
+func TestRunSelectsEnvironments(t *testing.T) {
+	tests := []struct {
+		name   string
+		config string // по умолчанию allPairsConfig
+		args   []string
+		want   string
+	}{
+		{
+			name: "окружения всех проектов",
+			args: []string{"-e", "DEV,DEMO"},
+			want: "project2\n" + project2DevBlock + envSep + project2DemoBlock +
+				projectSep + "project1\n" + project1DevBlock + envSep + project1DemoBlock,
+		},
+		{
+			name: "одно окружение одного проекта",
+			args: []string{"-e", "PROD", "-p", "project1"},
+			want: "project1\n" + project1ProdBlock,
+		},
+		{
+			name: "окружения в порядке аргументов",
+			args: []string{"-e", "PROD,DEV", "-p", "project1"},
+			want: "project1\n" + project1ProdBlock + envSep + project1DevBlock,
+		},
+		{
+			name: "проекты в порядке -p",
+			args: []string{"-e", "DEV", "-p", "project1,project2"},
+			want: "project1\n" + project1DevBlock + projectSep + "project2\n" + project2DevBlock,
+		},
+		{
+			name: "имя без учёта регистра, в выводе как в конфиге",
+			args: []string{"-e", "prod,Demo", "-p", "project1"},
+			want: "project1\n" + project1ProdBlock + envSep + project1DemoBlock,
+		},
+		{
+			name: "пробелы вокруг имён обрезаются",
+			args: []string{"-e", " PROD , DEV ", "-p", "project1"},
+			want: "project1\n" + project1ProdBlock + envSep + project1DevBlock,
+		},
+		{
+			name: "пустые элементы пропускаются",
+			args: []string{"-e", "PROD,,DEV,", "-p", "project1"},
+			want: "project1\n" + project1ProdBlock + envSep + project1DevBlock,
+		},
+		{
+			name: "повторный флаг накапливает имена",
+			args: []string{"-e", "PROD", "-e", "DEV", "-p", "project1"},
+			want: "project1\n" + project1ProdBlock + envSep + project1DevBlock,
+		},
+		{
+			name: "повторы схлопываются по первому вхождению без учёта регистра",
+			args: []string{"-e", "dev,DEMO,DEV", "-e", "demo", "-p", "project1"},
+			want: "project1\n" + project1DevBlock + envSep + project1DemoBlock,
+		},
+		{
+			name: "запись -e=",
+			args: []string{"-e=PROD", "-p", "project1"},
+			want: "project1\n" + project1ProdBlock,
+		},
+		{
+			name: "запись --e",
+			args: []string{"--e", "PROD", "-p", "project1"},
+			want: "project1\n" + project1ProdBlock,
+		},
+		{
+			name:   "проект без окружения не выводится",
+			config: project2WithoutDemoConfig,
+			args:   []string{"-e", "DEMO"},
+			want:   "project1\n" + project1DemoBlock,
+		},
+		{
+			name:   "проект без окружения не выводится и при -p",
+			config: project2WithoutDemoConfig,
+			args:   []string{"-e", "DEMO", "-p", "project2,project1"},
+			want:   "project1\n" + project1DemoBlock,
+		},
+		{
+			name:   "у проекта выводятся только его окружения из -e",
+			config: project2WithoutDemoConfig,
+			args:   []string{"-e", "DEMO,PROD"},
+			want:   "project2\n" + project2ProdBlock + projectSep + "project1\n" + project1DemoBlock + envSep + project1ProdBlock,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertOutput(t, cmp.Or(tt.config, allPairsConfig), testGitLab, tt.args, tt.want)
+		})
+	}
+}
+
+// TestRunRequestsOnlySelectedPairs проверяет, что gms запрашивает текущий деплой только выведенных пар.
+func TestRunRequestsOnlySelectedPairs(t *testing.T) {
+	tests := []struct {
+		name          string
+		args          []string
+		want          string
+		wantRequested []string // запрошенные пары «путь проекта окружение» по алфавиту
+	}{
+		{
+			name:          "окружение всех проектов",
+			args:          []string{"-e", "PROD"},
+			want:          "project2\n" + project2ProdBlock + projectSep + "project1\n" + project1ProdBlock,
+			wantRequested: []string{"group/project1 prod", "group/project2 prod"},
+		},
+		{
+			name:          "окружения одного проекта",
+			args:          []string{"-e", "demo,prod", "-p", "project1"},
+			want:          "project1\n" + project1DemoBlock + envSep + project1ProdBlock,
+			wantRequested: []string{"group/project1 demo", "group/project1 prod"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var mu sync.Mutex
+			var requested []string
+			glab := fakeGlab(t, testGitLab, glabFaults{})
+			recording := func(args ...string) ([]byte, error) {
+				query, _ := graphqlQuery(args)
+				mu.Lock()
+				requested = append(requested, deploymentPairs(query)...)
+				mu.Unlock()
+				return glab(args...)
+			}
+			code, stdout, stderr := runWithEnv(t, configEnv(t, allPairsConfig), recording, tt.args)
+			assertResult(t, code, stdout, stderr, 0, tt.want, "")
+			slices.Sort(requested)
+			if !slices.Equal(requested, tt.wantRequested) {
+				t.Errorf("запрошены пары %q, want %q", requested, tt.wantRequested)
+			}
 		})
 	}
 }

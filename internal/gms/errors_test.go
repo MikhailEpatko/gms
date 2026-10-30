@@ -21,6 +21,7 @@ func TestRunShowsPairErrorInPlace(t *testing.T) {
 		config string     // по умолчанию twoProjectsConfig
 		gl     fakeGitLab // по умолчанию testGitLab
 		faults glabFaults
+		args   []string
 		want   string
 	}{
 		{
@@ -58,6 +59,16 @@ DEV:
 			config: project2AllConfig,
 			gl:     testGitLab.withDeployment("group/project2", "demo", "synthetic/last-deployment-no-job.json"),
 			want: "project2\n" + project2DevBlock + envSep + `DEMO:
+ошибка: в ответе GitLab нет job.finishedAt
+` + envSep + project2ProdBlock,
+		},
+		{
+			name:   "ошибка пары среди выбранных окружений",
+			config: project2AllConfig,
+			gl:     testGitLab.withDeployment("group/project2", "demo", "synthetic/last-deployment-no-job.json"),
+			args:   []string{"-e", "DEMO,PROD"},
+			want: `project2
+DEMO:
 ошибка: в ответе GitLab нет job.finishedAt
 ` + envSep + project2ProdBlock,
 		},
@@ -121,7 +132,7 @@ DEV:
 			if gl == nil {
 				gl = testGitLab
 			}
-			assertRun(t, cmp.Or(tt.config, twoProjectsConfig), gl, tt.faults, nil, 1, tt.want, "")
+			assertRun(t, cmp.Or(tt.config, twoProjectsConfig), gl, tt.faults, tt.args, 1, tt.want, "")
 		})
 	}
 }

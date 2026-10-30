@@ -67,12 +67,13 @@ func (d Deployment) mark(branch string) string {
 	return " (ветка: " + d.Ref + ")"
 }
 
-const usage = `использование: gms [-p код,код] [-c]
+const usage = `использование: gms [-p код,код] [-e имя,имя] [-c]
 
 Показывает текущий деплой каждого окружения проектов из конфига:
 дату деплоя, версию приложения и коммит деплоя.
 
   -p код,код  только перечисленные проекты, в порядке аргументов
+  -e имя,имя  только перечисленные окружения, в порядке аргументов, регистр не важен
   -c          напечатать путь к конфигу и выйти
   -h          показать эту справку
 
@@ -107,14 +108,29 @@ func (r reporter) usageError(err error) {
 	fmt.Fprintf(r.w, "gms: %v\n%s", err, usage)
 }
 
-// extraArgs сообщает о позиционных аргументах extra и подсказывает запись кодов codes через -p.
-func (r reporter) extraArgs(extra, codes []string) {
-	fmt.Fprintf(r.w, "gms: лишние аргументы: %s\nкоды проектов перечисляются через запятую: gms -p %s\n",
-		strings.Join(extra, " "), strings.Join(codes, ","))
+// extraArgs сообщает о позиционных аргументах extra и подсказывает исправленную команду с кодами codes в -p
+// и именами окружений envNames в -e.
+func (r reporter) extraArgs(extra, codes, envNames []string) {
+	what, cmd := "коды проектов", "gms"
+	if len(codes) > 0 {
+		cmd += " -p " + strings.Join(codes, ",")
+	}
+	if len(envNames) > 0 {
+		cmd += " -e " + strings.Join(envNames, ",")
+		what = "окружения"
+		if len(codes) > 0 {
+			what = "коды проектов и окружения"
+		}
+	}
+	fmt.Fprintf(r.w, "gms: лишние аргументы: %s\n%s перечисляются через запятую: %s\n", strings.Join(extra, " "), what, cmd)
 }
 
 func (r reporter) emptyCodes() {
 	fmt.Fprintln(r.w, "gms: в -p не указан ни один код проекта, пример: -p project1,project3")
+}
+
+func (r reporter) emptyEnvNames() {
+	fmt.Fprintln(r.w, "gms: в -e не указано ни одно окружение, пример: -e DEV,DEMO")
 }
 
 func (r reporter) missingConfig(path string) {
@@ -127,11 +143,28 @@ func (r reporter) unknownCodes(projects []Project, unknown []string) {
 	for i, p := range projects {
 		known[i] = p.Code
 	}
-	label := "неизвестный код проекта"
-	if len(unknown) > 1 {
-		label = "неизвестные коды проектов"
-	}
+	label := plural(len(unknown), "неизвестный код проекта", "неизвестные коды проектов")
 	fmt.Fprintf(r.w, "gms: %s: %s\nизвестные коды: %s\n", label, strings.Join(unknown, ", "), strings.Join(known, ", "))
+}
+
+// unknownEnvNames сообщает об именах окружений unknown, которых нет в конфиге, и перечисляет известные имена known.
+func (r reporter) unknownEnvNames(known, unknown []string) {
+	label := plural(len(unknown), "неизвестное окружение", "неизвестные окружения")
+	fmt.Fprintf(r.w, "gms: %s: %s\nизвестные окружения: %s\n", label, strings.Join(unknown, ", "), strings.Join(known, ", "))
+}
+
+// noSelectedEnvs сообщает, что ни у одного из проектов codes нет ни одного окружения из names.
+func (r reporter) noSelectedEnvs(codes, names []string) {
+	fmt.Fprintf(r.w, "gms: у %s %s нет %s %s\n", plural(len(codes), "проекта", "проектов"), strings.Join(codes, ", "),
+		plural(len(names), "окружения", "окружений"), strings.Join(names, ", "))
+}
+
+// plural возвращает one для одного элемента и many для нескольких.
+func plural(n int, one, many string) string {
+	if n > 1 {
+		return many
+	}
+	return one
 }
 
 // glabUnusable сообщает, что glab не установлен или GitLab host ответил ему анонимно (err), и подсказывает, как это исправить.

@@ -167,6 +167,21 @@ func fakeGlab(t *testing.T, gl fakeGitLab, faults glabFaults) func(args ...strin
 	}
 }
 
+// deploymentPairs возвращает пары запроса деплоев query в виде «путь проекта окружение» в порядке запроса.
+func deploymentPairs(query string) []string {
+	var pairs []string
+	var project string
+	for _, m := range graphqlField.FindAllStringSubmatch(query, -1) {
+		switch field, arg := m[2], m[3]; {
+		case strings.HasPrefix(field, "project"):
+			project = arg
+		case strings.HasPrefix(field, "environment"):
+			pairs = append(pairs, project+" "+arg)
+		}
+	}
+	return pairs
+}
+
 // graphqlQuery возвращает запрос из вызова glab api --hostname <хост> graphql -f query=<запрос>.
 func graphqlQuery(args []string) (string, bool) {
 	if len(args) != 6 || args[0] != "api" || args[1] != "--hostname" || args[3] != "graphql" || args[4] != "-f" {
@@ -300,6 +315,19 @@ const allPairsConfig = `{
   "project2": {
     "DEV": "https://gitlab.example.com/group/project2/-/tree/dev",
     "DEMO": "https://gitlab.example.com/group/project2/-/tree/demo",
+    "PROD": "https://gitlab.example.com/group/project2/-/tree/main"
+  },
+  "project1": {
+    "DEV": "https://gitlab.example.com/group/project1/-/tree/dev",
+    "DEMO": "https://gitlab.example.com/group/project1/-/tree/demo",
+    "PROD": "https://gitlab.example.com/group/project1/-/tree/main"
+  }
+}`
+
+// project2WithoutDemoConfig — project2 с окружениями DEV и PROD и project1 с окружениями DEV, DEMO и PROD.
+const project2WithoutDemoConfig = `{
+  "project2": {
+    "DEV": "https://gitlab.example.com/group/project2/-/tree/dev",
     "PROD": "https://gitlab.example.com/group/project2/-/tree/main"
   },
   "project1": {

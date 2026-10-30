@@ -21,7 +21,7 @@ type Project struct {
 
 // Environment — окружение проекта, разобранное из URL ветки окружения.
 type Environment struct {
-	Name        string // ключ окружения как в конфиге, например DEV
+	Name        string // имя окружения как в конфиге, например DEV
 	Host        string // хост GitLab
 	ProjectPath string // путь проекта в GitLab, например group/project1
 	Branch      string // ветка окружения
