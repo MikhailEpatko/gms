@@ -19,6 +19,8 @@ go test ./internal/gms -run TestName -v   # один тест
 
 Тот же `scripts/check.sh` запускает pre-commit hook из `.githooks/`. В новом клоне hook подключается командой `git config core.hooksPath .githooks`.
 
+Агент проверяет файлы, запускает отдельные тесты и ищет вызовы через MCP GoLand и LSP по `.claude/rules/goland-mcp.md`, а Bash нужен для `scripts/check.sh` и прогонов с `-race`.
+
 ## Что делает утилита `gms`
 
 CLI, который для каждого проекта и каждого окружения показывает текущий деплой: дату деплоя, версию приложения и коммит деплоя.
