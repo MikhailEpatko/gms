@@ -69,7 +69,6 @@ func TestRunPrintsConfigPath(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Конфига по этим путям нет: -c его не читает.
 			code, stdout, stderr := runWithEnv(t, tt.env, forbiddenGlab(t), tt.args)
 			assertResult(t, code, stdout, stderr, 0, tt.want, "")
 		})
@@ -94,8 +93,6 @@ func TestRunShowsHelp(t *testing.T) {
 	assertResult(t, code, stdout, stderr, 0, wantUsage, "")
 }
 
-// envNamesConfig — проекты с разными наборами окружений: project2 с dev и PROD, project3 с DEV и PROD,
-// project1 с DEV, DEMO и DMZ. Окружение DEV у project2 записано в нижнем регистре.
 const envNamesConfig = `{
   "project2": {
     "dev": "https://gitlab.example.com/group/project2/-/tree/dev",
@@ -112,11 +109,10 @@ const envNamesConfig = `{
   }
 }`
 
-// TestRunRejectsUsageErrors проверяет, что ошибки использования дают код выхода 2 до любых вызовов glab.
 func TestRunRejectsUsageErrors(t *testing.T) {
 	tests := []struct {
 		name       string
-		config     string // по умолчанию twoProjectsConfig
+		config     string
 		args       []string
 		wantStderr string
 	}{

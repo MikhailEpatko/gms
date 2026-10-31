@@ -6,27 +6,22 @@ import (
 	"testing"
 )
 
-// Заготовки в testdata/synthetic не сняты с GitLab: last-deployment-no-job и last-deployment-no-sha —
-// это project2/last-deployment-dev.json с job: null и без commit.sha. application.version-no-build-version —
-// одна строка version=7.0.2 без build_version, application.version-empty-build-version — одна строка build_version=
-// без значения.
 func TestRunShowsPairErrorInPlace(t *testing.T) {
-	// На коммите деплоя project2 нет application.version.
 	noVersionFile := fakeGitLab{
-		"group/project2": {deployments: testGitLab["group/project2"].deployments},
+		"group/project2": {deploymentByEnv: testGitLab["group/project2"].deploymentByEnv},
 		"group/project1": testGitLab["group/project1"],
 	}
 	tests := []struct {
 		name   string
-		config string     // по умолчанию twoProjectsConfig
-		gl     fakeGitLab // по умолчанию testGitLab
+		config string
+		gl     fakeGitLab
 		faults glabFaults
 		args   []string
 		want   string
 	}{
 		{
 			name:   "ошибка запроса текущих деплоев",
-			faults: glabFaults{deployments: errors.New("glab: 500 Internal Server Error")},
+			faults: glabFaults{deploymentsErr: errors.New("glab: 500 Internal Server Error")},
 			want: `project2
 DEV:
 ошибка: glab: 500 Internal Server Error
@@ -82,7 +77,7 @@ DEV:
 		},
 		{
 			name:   "ошибка запроса версий",
-			faults: glabFaults{versions: errors.New("glab: 502 Bad Gateway")},
+			faults: glabFaults{versionsErr: errors.New("glab: 502 Bad Gateway")},
 			want: `project2
 DEV:
 2026-09-24 16:35:33 MSK
@@ -137,11 +132,10 @@ DEV:
 	}
 }
 
-// TestRunStopsWhenGlabUnusable проверяет, что без рабочего glab gms ничего не выводит в stdout и выходит с подсказкой.
 func TestRunStopsWhenGlabUnusable(t *testing.T) {
 	tests := []struct {
 		name       string
-		config     string // по умолчанию twoProjectsConfig
+		config     string
 		faults     glabFaults
 		wantStderr string
 	}{
@@ -153,7 +147,7 @@ func TestRunStopsWhenGlabUnusable(t *testing.T) {
 		},
 		{
 			name:   "glab не залогинен в хост",
-			faults: glabFaults{anonymous: []string{host}},
+			faults: glabFaults{anonymousHosts: []string{host}},
 			wantStderr: "gms: glab не прошёл проверку входа в gitlab.example.com: GitLab не узнал пользователя glab\n" +
 				"выполните: glab auth login --hostname gitlab.example.com\n",
 		},
@@ -168,7 +162,7 @@ func TestRunStopsWhenGlabUnusable(t *testing.T) {
     "DEMO": "https://gitlab.example.org/group/project1/-/tree/demo"
   }
 }`,
-			faults: glabFaults{anonymous: []string{"gitlab.example.org"}},
+			faults: glabFaults{anonymousHosts: []string{"gitlab.example.org"}},
 			wantStderr: "gms: glab не прошёл проверку входа в gitlab.example.org: GitLab не узнал пользователя glab\n" +
 				"выполните: glab auth login --hostname gitlab.example.org\n",
 		},

@@ -1,7 +1,4 @@
 #!/bin/bash
-# Проверки защиты от секретов: правила .gitleaks.toml на случаях из ai/9/spec.md, pre-commit hook в одноразовых
-# репозиториях и все файлы репозитория по текущим правилам. Запускается из scripts/check.sh, нужен gitleaks.
-# Проверки независимы и идут параллельно; каждая печатает ok или FAIL в свой файл результатов.
 set -u
 cd "$(dirname "$0")/.."
 root=$(pwd)
@@ -10,44 +7,52 @@ if ! command -v gitleaks >/dev/null 2>&1; then
 	echo "gitleaks не найден, установите его по README.md" >&2
 	exit 1
 fi
-# Из hook git передаёт переменные своего репозитория (GIT_INDEX_FILE и др.), а здесь git работает в чужих.
-unset $(git rev-parse --local-env-vars)
-unset GITLEAKS_CONFIG GITLEAKS_CONFIG_TOML
+outer_repo_vars=$(git rev-parse --local-env-vars)
+unset $outer_repo_vars GITLEAKS_CONFIG GITLEAKS_CONFIG_TOML
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 trap 'exit 1' INT TERM
-mkdir -p "$work/res"
+results_dir=$work/results
+mkdir -p "$results_dir"
 
 ok() { echo ok; }
-bad() { printf 'FAIL %s\n' "$*"; }
-expect() { if eval "$2"; then ok; else bad "$1"; fi; }
+bad() {
+	local failure=$1
+	printf 'FAIL %s\n' "$failure"
+}
+expect() {
+	local description=$1 condition=$2
+	if eval "$condition"; then ok; else bad "$description"; fi
+}
+in_background() {
+	local check=$1 case_name=${2:-}
+	"$@" >"$results_dir/$check-$case_name" 2>&1 &
+}
 
-# run <проверка> [аргументы]: проверка в фоне, вывод — в файл результатов.
-run() { "$@" >"$work/res/$1-${2:-}" 2>&1 & }
-
-# --- Правила: каждая строка случая — отдельный файл, все файлы проверяются одним запуском gitleaks.
-# Строки записаны с ~ вместо :// и собираются только во временном каталоге, поэтому сам скрипт правила проходят.
 cases=$work/cases
 mkdir -p "$cases"
 names=()
 rules=()
 frags=()
 
-# put <файл> <строка>: записывает строку, заменив ~ на ://.
-put() { printf '%s\n' "${2//\~/://}" >"$1"; }
-
-# blocked <имя> <правила> <строка> <фрагменты>: строку ловят все правила из списка, ни один фрагмент секрета
-# не виден в выводе gitleaks. Файл случая назван номером, чтобы имя случая не совпало с фрагментом.
-blocked() {
-	put "$cases/${#names[@]}" "$3"
-	names+=("$1")
-	rules+=("$2")
-	frags+=("$4")
+put() {
+	local file=$1 line=$2
+	printf '%s\n' "${line//\~/://}" >"$file"
 }
 
-# passes <имя> <строка>: у строки нет находок.
-passes() { blocked "$1" "" "$2" ""; }
+blocked() {
+	local case_name=$1 catching_rules=$2 line=$3 hidden_fragments=$4
+	put "$cases/${#names[@]}" "$line"
+	names+=("$case_name")
+	rules+=("$catching_rules")
+	frags+=("$hidden_fragments")
+}
+
+passes() {
+	local case_name=$1 line=$2
+	blocked "$case_name" "" "$line" ""
+}
 
 blocked 'pass внутри пароля' url-credentials 'export HTTPS_PROXY=http~ivanov:S3cr3tPassw0rd77@proxy.corp.local:3128' 'S3cr3tPassw0rd77 corp.local'
 blocked 'логин user' url-credentials 'http~user:RealPassw0rd@proxy.corp.local:3128' 'RealPassw0rd corp.local'
@@ -117,14 +122,20 @@ passes 'ссылка на MR' 'https~gitlab.corp-internal.ru/grp/p1/-/merge_requ
 passes 'ссылка на pipeline' 'https~gitlab.corp-internal.ru/grp/p1/-/pipelines/100500'
 passes 'ссылка на blob' 'https~gitlab.corp-internal.ru/grp/p1/-/blob/main/README.md'
 
-# leaks <каталог> <путь>: gitleaks с правилами репозитория и выводом как у hook (-v --redact), путь — от каталога.
-leaks() { (cd "$1" && gitleaks dir --no-banner --no-color --redact -v --config "$root/.gitleaks.toml" "$2" 2>&1); }
+leaks() {
+	local dir=$1 path_in_dir=$2
+	(cd "$dir" && gitleaks dir --no-banner --no-color --redact -v --config "$root/.gitleaks.toml" "$path_in_dir" 2>&1)
+}
 
-# Вывод gitleaks разбит на блоки находок по файлам случаев.
+split_findings_by_case_file() {
+	local gitleaks_out=$1 found_dir=$2
+	awk -v dir="$found_dir" 'BEGIN { RS = "" } { for (i = 1; i < NF; i++) if ($i == "File:" && $(i + 1) ~ /^cases\//) { f = $(i + 1); sub(/^cases\//, "", f); print $0 "\n" >> (dir "/" f) } }' "$gitleaks_out"
+}
+
 check_rules() {
 	local out=$work/rules.out i rule frag found
 	leaks "$work" cases >"$out"
-	awk -v dir="$work/found" 'BEGIN { RS = "" } { for (i = 1; i < NF; i++) if ($i == "File:" && $(i + 1) ~ /^cases\//) { f = $(i + 1); sub(/^cases\//, "", f); print $0 "\n" >> (dir "/" f) } }' "$out"
+	split_findings_by_case_file "$out" "$work/found"
 	set -f
 	for i in "${!names[@]}"; do
 		found=$(cat "$work/found/$i" 2>/dev/null)
@@ -141,36 +152,27 @@ check_rules() {
 	done
 }
 mkdir -p "$work/found"
-run check_rules
+in_background check_rules
 
-# --- Файлы репозитория проходят текущие правила: в клоне — отслеживаемые и новые, в копии индекса из hook,
-# где нет .git, — все. Запускается до подмены глобального конфига git ниже: ls-files учитывает
-# core.excludesFile пользователя. .gitleaksignore не копируется, чтобы не пропустить находки молча.
 check_files() {
 	local files=$work/files paths=() f scan rc
 	mkdir -p "$files"
 	if [ -e .git ]; then
-		list() { git ls-files -z -co --exclude-standard; }
+		repo_files() { git ls-files -z -co --exclude-standard; }
 	else
-		list() { find . -type f -print0; }
+		repo_files() { find . -type f -print0; }
 	fi
 	while IFS= read -r -d '' f; do
 		f=${f#./}
 		[ -f "$f" ] && [ "${f##*/}" != .gitleaksignore ] && paths+=("$f")
-	done < <(list)
+	done < <(repo_files)
 	tar -cf - "${paths[@]}" | tar -xf - -C "$files"
 	scan=$(leaks "$files" .)
 	rc=$?
 	expect "файлы репозитория проходят правила:"$'\n'"$scan" '[ $rc -eq 0 ]'
 }
-run check_files
+in_background check_files
 
-# --- Hook: коммиты в копиях базового репозитория с hook и .gitleaks.toml из этого репозитория. Заглушка
-# check.sh печатает CHECK-RAN и падает, если в её копии репозитория файл state содержит red. Запуск процесса
-# на рабочей машине дорогой (ADR 0004), поэтому совместимые случаи собраны в один коммит, а проверки результата
-# обходятся встроенными командами bash.
-
-# Свой глобальный конфиг git: автор коммитов есть и в CI, а hooksPath, подпись и шаблоны пользователя не мешают.
 export GIT_CONFIG_GLOBAL=$work/gitconfig GIT_CONFIG_NOSYSTEM=1
 printf '[user]\n\tname = gms\n\temail = gms@example.com\n[commit]\n\tgpgsign = false\n[core]\n\thooksPath = .githooks\n[init]\n\tdefaultBranch = main\n' >"$GIT_CONFIG_GLOBAL"
 
@@ -178,8 +180,7 @@ base=$work/base
 mkdir -p "$base/.githooks" "$base/scripts"
 cp "$root/.githooks/pre-commit" "$base/.githooks/"
 cp "$root/.gitleaks.toml" "$base/"
-cat >"$base/scripts/check.sh" <<'EOF'
-#!/bin/sh
+{ echo '#!/bin/sh'; cat <<'EOF'; } >"$base/scripts/check.sh"
 echo CHECK-RAN
 { read -r state <"${0%/*}/../state"; } 2>/dev/null
 [ "${state:-}" != red ]
@@ -189,122 +190,122 @@ git -C "$base" init -q
 git -C "$base" add -A
 git -C "$base" -c core.hooksPath=/dev/null commit -q -m base
 
-# PATH без gitleaks: в нём только git, которому hook и нужен до проверки gitleaks.
-mkdir -p "$work/nogl"
-ln -s "$(command -v git)" "$work/nogl/git"
+path_with_only_git=$work/only-git
+mkdir -p "$path_with_only_git"
+ln -s "$(command -v git)" "$path_with_only_git/git"
 
-# token: TOK — случайный токен в формате правила gitleaks gitlab-pat.
-token() {
+new_gitlab_pat() {
 	local abc=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 i
-	TOK=glpat-
-	for i in {1..20}; do TOK+=${abc:RANDOM%62:1}; done
+	GITLAB_PAT=glpat-
+	for i in {1..20}; do GITLAB_PAT+=${abc:RANDOM%62:1}; done
 }
 
-# stage_token: TOK — новый токен, записан в a.txt и добавлен в индекс R.
-stage_token() {
-	token
-	put "$R/a.txt" "token = \"$TOK\""
-	git -C "$R" add a.txt
+stage_new_gitlab_pat() {
+	new_gitlab_pat
+	put "$REPO/a.txt" "token = \"$GITLAB_PAT\""
+	git -C "$REPO" add a.txt
 }
 
-# fresh <имя>: R — копия базового репозитория, T — пустой TMPDIR для hook, чтобы проверить, что hook его убрал.
-fresh() {
-	R=$work/run/$1
-	T=$work/tmp/$1
-	mkdir -p "$work/run" "$T"
-	cp -R "$base" "$R"
+fresh_repo() {
+	local case_name=$1
+	REPO=$work/run/$case_name
+	HOOK_TMPDIR=$work/tmp/$case_name
+	mkdir -p "$work/run" "$HOOK_TMPDIR"
+	cp -R "$base" "$REPO"
 }
 
-# try_commit [PATH]: коммит индекса R. OUT — вывод, RC — код, NEW — создан ли коммит.
 try_commit() {
-	local before after
-	read -r before <"$R/.git/refs/heads/main"
-	OUT=$(cd "$R" && TMPDIR=$T PATH=${1:-$PATH} git commit -m case 2>&1)
+	local path_for_commit=${1:-$PATH} before after
+	read -r before <"$REPO/.git/refs/heads/main"
+	OUT=$(cd "$REPO" && TMPDIR=$HOOK_TMPDIR PATH=$path_for_commit git commit -m case 2>&1)
 	RC=$?
-	read -r after <"$R/.git/refs/heads/main"
-	if [ "$after" != "$before" ]; then NEW=yes; else NEW=no; fi
+	read -r after <"$REPO/.git/refs/heads/main"
+	if [ "$after" != "$before" ]; then COMMITTED=yes; else COMMITTED=no; fi
 }
 
-has() { [[ $OUT == *"$1"* ]]; }
-cleaned() { ! compgen -G "$T/*" >/dev/null; }
+has() {
+	local text=$1
+	[[ $OUT == *"$text"* ]]
+}
+hook_tmpdir_cleaned() { ! compgen -G "$HOOK_TMPDIR/*" >/dev/null; }
 
-# hook_case <имя>: один сквозной случай hook в своей копии базового репозитория.
 hook_case() {
-	fresh "$1"
-	case $1 in
+	local case_name=$1
+	fresh_repo "$case_name"
+	case $case_name in
 	findings)
-		stage_token
-		put "$R/b.txt" 'proxy = http~ivanov:S3cr3tPassw0rd77@proxy.corp.local:3128'
-		git -C "$R" add b.txt
+		stage_new_gitlab_pat
+		put "$REPO/b.txt" 'proxy = http~ivanov:S3cr3tPassw0rd77@proxy.corp.local:3128'
+		git -C "$REPO" add b.txt
 		try_commit
-		expect "hook: секреты в индексе — коммит не создан, check.sh не запускался" '[ $NEW = no ] && [ $RC -ne 0 ] && ! has CHECK-RAN'
+		expect "hook: секреты в индексе — коммит не создан, check.sh не запускался" '[ $COMMITTED = no ] && [ $RC -ne 0 ] && ! has CHECK-RAN'
 		expect "hook: ловят правила по умолчанию и свои из .gitleaks.toml" 'has gitlab-pat && has url-credentials'
 		expect "hook: в выводе File и Line" 'has "File:" && has "Line:"'
-		expect "hook: секреты замаскированы" 'has REDACTED && ! has "$TOK" && ! has S3cr3tPassw0rd77'
+		expect "hook: секреты замаскированы" 'has REDACTED && ! has "$GITLAB_PAT" && ! has S3cr3tPassw0rd77'
 		expect "hook: подсказка после находки" 'has "коммит остановлен: в индексе найден секрет" && has "gitleaks:allow"'
 		;;
 	env-config)
-		put "$T.toml" "[[rules]]"$'\n'"id = \"never\""$'\n'"regex = '''NEVER_MATCH_q7z9'''"
-		put "$R/a.txt" 'proxy = http~ivanov:S3cr3tPassw0rd77@proxy.corp.local:3128'
-		git -C "$R" add a.txt
-		OUT=$(cd "$R" && TMPDIR=$T GITLEAKS_CONFIG=$T.toml git commit -m case 2>&1)
+		put "$HOOK_TMPDIR.toml" "[[rules]]"$'\n'"id = \"never\""$'\n'"regex = '''NEVER_MATCH_q7z9'''"
+		put "$REPO/a.txt" 'proxy = http~ivanov:S3cr3tPassw0rd77@proxy.corp.local:3128'
+		git -C "$REPO" add a.txt
+		OUT=$(cd "$REPO" && TMPDIR=$HOOK_TMPDIR GITLEAKS_CONFIG=$HOOK_TMPDIR.toml git commit -m case 2>&1)
 		expect "hook: GITLEAKS_CONFIG не подменяет правила" 'has url-credentials'
 		;;
 	staged-secret)
-		stage_token
-		put "$R/a.txt" clean
+		stage_new_gitlab_pat
+		put "$REPO/a.txt" clean
 		try_commit
-		expect "hook: секрет в индексе ловится, даже если в рабочем дереве его уже нет" '[ $NEW = no ] && has gitlab-pat'
+		expect "hook: секрет в индексе ловится, даже если в рабочем дереве его уже нет" '[ $COMMITTED = no ] && has gitlab-pat'
 		;;
 	missing)
-		put "$R/clean.txt" clean
-		git -C "$R" add clean.txt
-		try_commit "$work/nogl"
-		expect "hook: без gitleaks — коммит не создан, команда установки" '[ $NEW = no ] && [ $RC -eq 1 ] && ! has CHECK-RAN && has "gitleaks не найден, установите: go install github.com/zricethezav/gitleaks/v8@v8.30.1"'
+		put "$REPO/clean.txt" clean
+		git -C "$REPO" add clean.txt
+		try_commit "$path_with_only_git"
+		expect "hook: без gitleaks — коммит не создан, команда установки" '[ $COMMITTED = no ] && [ $RC -eq 1 ] && ! has CHECK-RAN && has "gitleaks не найден, установите: go install github.com/zricethezav/gitleaks/v8@v8.30.1"'
 		;;
 	broken-config)
-		put "$R/.gitleaks.toml" '[extend'
-		git -C "$R" add .gitleaks.toml
+		put "$REPO/.gitleaks.toml" '[extend'
+		git -C "$REPO" add .gitleaks.toml
 		try_commit
-		expect "hook: битый .gitleaks.toml — коммит не создан" '[ $NEW = no ] && ! has CHECK-RAN'
+		expect "hook: битый .gitleaks.toml — коммит не создан" '[ $COMMITTED = no ] && ! has CHECK-RAN'
 		;;
 	ignore-file)
-		stage_token
-		put "$R/.gitleaksignore" 'a.txt:gitlab-pat:1'
+		stage_new_gitlab_pat
+		put "$REPO/.gitleaksignore" 'a.txt:gitlab-pat:1'
 		try_commit
-		expect "hook: .gitleaksignore — отказ, секрет не пропущен" '[ $NEW = no ] && [ $RC -eq 1 ] && has "удалите .gitleaksignore" && ! has CHECK-RAN'
-		git -C "$R" rm -q --cached a.txt
-		put "$R/clean.txt" clean
-		git -C "$R" add clean.txt
+		expect "hook: .gitleaksignore — отказ, секрет не пропущен" '[ $COMMITTED = no ] && [ $RC -eq 1 ] && has "удалите .gitleaksignore" && ! has CHECK-RAN'
+		git -C "$REPO" rm -q --cached a.txt
+		put "$REPO/clean.txt" clean
+		git -C "$REPO" add clean.txt
 		try_commit
-		expect "hook: .gitleaksignore — отказ и без секрета в индексе" '[ $NEW = no ] && has "удалите .gitleaksignore" && ! has CHECK-RAN'
+		expect "hook: .gitleaksignore — отказ и без секрета в индексе" '[ $COMMITTED = no ] && has "удалите .gitleaksignore" && ! has CHECK-RAN'
 		;;
 	dirty-worktree)
-		put "$R/state" green
-		git -C "$R" add state
-		put "$R/state" red
-		token
-		put "$R/untracked.txt" "token = \"$TOK\""
+		put "$REPO/state" green
+		git -C "$REPO" add state
+		put "$REPO/state" red
+		new_gitlab_pat
+		put "$REPO/untracked.txt" "token = \"$GITLAB_PAT\""
 		try_commit
-		expect "hook: секрет и красная правка только в рабочем дереве не мешают коммиту" '[ $NEW = yes ] && has CHECK-RAN'
-		expect "hook: временная копия индекса убрана" cleaned
+		expect "hook: секрет и красная правка только в рабочем дереве не мешают коммиту" '[ $COMMITTED = yes ] && has CHECK-RAN'
+		expect "hook: временная копия индекса убрана" hook_tmpdir_cleaned
 		;;
 	red-index)
-		put "$R/state" red
-		git -C "$R" add state
-		put "$R/state" green
+		put "$REPO/state" red
+		git -C "$REPO" add state
+		put "$REPO/state" green
 		try_commit
-		expect "hook: красный check.sh на индексе останавливает коммит, даже если рабочее дерево исправлено" '[ $NEW = no ] && has CHECK-RAN'
-		expect "hook: временная копия индекса убрана и после красного check.sh" cleaned
+		expect "hook: красный check.sh на индексе останавливает коммит, даже если рабочее дерево исправлено" '[ $COMMITTED = no ] && has CHECK-RAN'
+		expect "hook: временная копия индекса убрана и после красного check.sh" hook_tmpdir_cleaned
 		;;
 	esac
 }
 for c in findings env-config staged-secret missing broken-config ignore-file dirty-worktree red-index; do
-	run hook_case "$c"
+	in_background hook_case "$c"
 done
 
 wait
-results=$(cat "$work"/res/*)
+results=$(cat "$results_dir"/*)
 passed=$(printf '%s\n' "$results" | grep -c '^ok$')
 failed=$(printf '%s\n' "$results" | grep -c '^FAIL')
 printf '%s\n' "$results" | grep -v '^ok$' >&2

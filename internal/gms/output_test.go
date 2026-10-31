@@ -66,8 +66,6 @@ func TestRunShowsCurrentDeploymentOfProject(t *testing.T) {
 	}
 }
 
-// Заготовки в testdata/synthetic не сняты с GitLab: last-deployment-mr, last-deployment-mr-merge и last-deployment-ci —
-// это project2/last-deployment-dev.json с подменённым ref.
 func TestRunMarksDeploymentRef(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -114,12 +112,10 @@ DEV:
 }
 
 func TestRunShowsNoDeployments(t *testing.T) {
-	// У DEV нет успешных деплоев.
-	noDevDeployments := testGitLab.withDeployment("group/project2", "dev", "")
-	// Окружения DEV в GitLab нет.
+	noDevDeployments := testGitLab.withDeployment("group/project2", "dev", noDeployments)
 	noDevEnvironment := fakeGitLab{"group/project2": {
-		deployments: map[string]string{"demo": "project2/last-deployment-demo.json"},
-		versions:    testGitLab["group/project2"].versions,
+		deploymentByEnv:  map[string]string{"demo": "project2/last-deployment-demo.json"},
+		versionFileBySHA: testGitLab["group/project2"].versionFileBySHA,
 	}}
 	tests := []struct {
 		name   string

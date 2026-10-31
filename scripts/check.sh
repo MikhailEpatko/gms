@@ -1,6 +1,4 @@
 #!/bin/sh
-# Все проверки репозитория: форматирование, vet, тесты с детектором гонок без кеша, защита от секретов
-# (правила gitleaks, pre-commit hook и файлы репозитория, нужен gitleaks).
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -10,6 +8,11 @@ if [ -n "$unformatted" ]; then
 	echo "$unformatted" >&2
 	exit 1
 fi
+if ! command -v nocomments >/dev/null 2>&1; then
+	echo "nocomments не найден, установите: go install github.com/MikhailEpatko/nocomments@latest" >&2
+	exit 1
+fi
+nocomments
 go vet ./...
 go test -race -count=1 ./...
 scripts/check-secrets.sh

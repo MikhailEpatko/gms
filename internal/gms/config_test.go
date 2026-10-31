@@ -25,42 +25,38 @@ func TestRunAsksToCreateMissingConfig(t *testing.T) {
 	home := t.TempDir()
 	custom := filepath.Join(t.TempDir(), "gms", "config.json")
 	tests := []struct {
-		name string
-		env  map[string]string
-		path string // путь, который gms просит создать
+		name     string
+		env      map[string]string
+		wantPath string
 	}{
 		{
-			name: "по умолчанию в домашнем каталоге",
-			env:  map[string]string{"HOME": home},
-			path: filepath.Join(home, ".config", "gms", "config.json"),
+			name:     "по умолчанию в домашнем каталоге",
+			env:      map[string]string{"HOME": home},
+			wantPath: filepath.Join(home, ".config", "gms", "config.json"),
 		},
 		{
-			name: "из GMS_CONFIG",
-			env:  map[string]string{"HOME": home, "GMS_CONFIG": custom},
-			path: custom,
+			name:     "из GMS_CONFIG",
+			env:      map[string]string{"HOME": home, "GMS_CONFIG": custom},
+			wantPath: custom,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			code, stdout, stderr := runWithEnv(t, tt.env, forbiddenGlab(t), nil)
 			assertResult(t, code, stdout, stderr, 1, "",
-				"gms: нет файла конфига, создайте "+tt.path+"\nпример:\n"+wantExampleConfig)
-			if _, err := os.Stat(filepath.Dir(tt.path)); !errors.Is(err, os.ErrNotExist) {
+				"gms: нет файла конфига, создайте "+tt.wantPath+"\nпример:\n"+wantExampleConfig)
+			if _, err := os.Stat(filepath.Dir(tt.wantPath)); !errors.Is(err, os.ErrNotExist) {
 				t.Errorf("каталог конфига создан или недоступен: %v", err)
 			}
 		})
 	}
 }
 
-// TestRunExampleConfigIsValid проверяет, что пример из сообщения об отсутствии конфига gms принимает:
-// по известным кодам в ошибке неизвестного кода видно, что конфиг прочитан.
 func TestRunExampleConfigIsValid(t *testing.T) {
 	code, stdout, stderr := runWithEnv(t, configEnv(t, wantExampleConfig), forbiddenGlab(t), []string{"-p", "foo"})
 	assertResult(t, code, stdout, stderr, 2, "", "gms: неизвестный код проекта: foo\nизвестные коды: project1, project2\n")
 }
 
-// TestRunNeedsHomeWithoutGmsConfig проверяет, что без GMS_CONFIG, HOME и домашнего каталога ОС путь к конфигу
-// не строится относительно текущего каталога.
 func TestRunNeedsHomeWithoutGmsConfig(t *testing.T) {
 	for _, args := range [][]string{nil, {"-c"}} {
 		t.Run(fmt.Sprint(args), func(t *testing.T) {
@@ -74,8 +70,8 @@ func TestRunRejectsInvalidConfig(t *testing.T) {
 	tests := []struct {
 		name     string
 		config   string
-		wantLine int    // номер строки синтаксической ошибки JSON, 0 — без номера
-		wantErr  string // причина после «некорректный конфиг <путь>[:<строка>]: »
+		wantLine int
+		wantErr  string
 	}{
 		{
 			name:    "URL без /-/tree/",

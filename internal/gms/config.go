@@ -13,22 +13,18 @@ import (
 	"strings"
 )
 
-// Project — проект из конфига с окружениями в порядке файла.
 type Project struct {
 	Code         string
 	Environments []Environment
 }
 
-// Environment — окружение проекта, разобранное из URL ветки окружения.
 type Environment struct {
-	Name        string // имя окружения как в конфиге, например DEV
-	Host        string // хост GitLab
-	ProjectPath string // путь проекта в GitLab, например group/project1
-	Branch      string // ветка окружения
+	Name        string
+	Host        string
+	ProjectPath string
+	Branch      string
 }
 
-// configPath возвращает путь к конфигу: из GMS_CONFIG, а без неё — в домашнем каталоге из HOME или,
-// если HOME не задан, из homeDir.
 func configPath(getenv func(string) string, homeDir func() (string, error)) (string, error) {
 	if p := getenv("GMS_CONFIG"); p != "" {
 		return p, nil
@@ -38,7 +34,6 @@ func configPath(getenv func(string) string, homeDir func() (string, error)) (str
 		home, _ = homeDir()
 	}
 	if home == "" {
-		// Иначе путь стал бы относительным и зависел от текущего каталога.
 		return "", errors.New("не удалось определить домашний каталог, укажите путь к конфигу в GMS_CONFIG")
 	}
 	return filepath.Join(home, ".config", "gms", "config.json"), nil
@@ -51,7 +46,6 @@ func loadConfig(path string) ([]Project, error) {
 	}
 	projects, err := parseConfig(data)
 	if err != nil {
-		// Окружение синтаксической ошибки JSON известно не всегда, поэтому указываем строку.
 		where := path
 		if se, ok := errors.AsType[*json.SyntaxError](err); ok {
 			where += ":" + strconv.Itoa(1+bytes.Count(data[:se.Offset], []byte("\n")))
@@ -61,8 +55,6 @@ func loadConfig(path string) ([]Project, error) {
 	return projects, nil
 }
 
-// parseConfig читает JSON потоком токенов, чтобы сохранить порядок ключей на обоих уровнях.
-// Ошибка указывает проект и окружение, в которых она найдена.
 func parseConfig(data []byte) ([]Project, error) {
 	if len(bytes.TrimSpace(data)) == 0 {
 		return nil, errors.New("файл пуст")
@@ -105,10 +97,7 @@ func parseConfig(data []byte) ([]Project, error) {
 	return projects, nil
 }
 
-// decodeObject проходит по ключам JSON-объекта в порядке файла и вызывает value для каждого ключа,
-// который должен прочитать значение из dec. Ошибки разбора самого объекта предваряются errPrefix, если он
-// не пуст; ошибки value возвращаются как есть.
-func decodeObject(dec *json.Decoder, errPrefix string, value func(key string) error) error {
+func decodeObject(dec *json.Decoder, errPrefix string, decodeValue func(key string) error) error {
 	wrap := func(err error) error {
 		if err == nil || errPrefix == "" {
 			return err
@@ -123,7 +112,7 @@ func decodeObject(dec *json.Decoder, errPrefix string, value func(key string) er
 		if err != nil {
 			return wrap(err)
 		}
-		if err := value(tok.(string)); err != nil {
+		if err := decodeValue(tok.(string)); err != nil {
 			return err
 		}
 	}
@@ -141,7 +130,6 @@ func expectDelim(dec *json.Decoder, want json.Delim) error {
 	return nil
 }
 
-// parseBranchURL разбирает URL вида https://<host>/<group>/<repo>/-/tree/<branch>.
 func parseBranchURL(raw string) (Environment, error) {
 	u, err := url.Parse(raw)
 	if err != nil {

@@ -64,7 +64,7 @@ func TestRunSelectsProjects(t *testing.T) {
 func TestRunSelectsEnvironments(t *testing.T) {
 	tests := []struct {
 		name   string
-		config string // по умолчанию allPairsConfig
+		config string
 		args   []string
 		want   string
 	}{
@@ -150,13 +150,12 @@ func TestRunSelectsEnvironments(t *testing.T) {
 	}
 }
 
-// TestRunRequestsOnlySelectedPairs проверяет, что gms запрашивает текущий деплой только выведенных пар.
 func TestRunRequestsOnlySelectedPairs(t *testing.T) {
 	tests := []struct {
 		name          string
 		args          []string
 		want          string
-		wantRequested []string // запрошенные пары «путь проекта окружение» по алфавиту
+		wantRequested []string
 	}{
 		{
 			name:          "окружение всех проектов",

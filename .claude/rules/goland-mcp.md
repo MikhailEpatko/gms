@@ -31,7 +31,7 @@ Run points запускают тесты без `-race` и `-count`. Финал�
 
 - Найти символ: LSP `workspaceSymbol` (имя, вид, файл, строка).
 - Дерево вызовов: LSP `incomingCalls` (кто вызывает) и `outgoingCalls` (что вызывает) на позиции имени функции.
-- Использования: LSP `findReferences`. Сигнатура и doc-комментарий: LSP `hover` или MCP `get_symbol_info`.
+- Использования: LSP `findReferences`. Сигнатура и тип: LSP `hover` или MCP `get_symbol_info`.
 
 MCP `analyze_calls` в GoLand 2026.2 не находит Go-функции ни по одной форме имени, а `search_symbol` возвращает координаты без имён (проверено 2026-10-30). После обновления GoLand проверь `analyze_calls` на `Run` из `internal/gms/run.go`, и если он заработал, поправь этот раздел.
 
@@ -47,5 +47,5 @@ MCP `analyze_calls` в GoLand 2026.2 не находит Go-функции ни 
 
 ## Правки
 
-- Go-идентификатор переименовывает `rename_refactoring`: он обновляет все использования и doc-комментарии во всех файлах. Затем `lint_files` по файлам из `git diff --name-only`.
+- Go-идентификатор переименовывает `rename_refactoring`: он обновляет все использования во всех файлах. Затем `lint_files` по файлам из `git diff --name-only`.
 - Файлы создаёт Write и читает Read: `create_new_file` сразу добавляет файл в индекс git, а `read_file` обрезает середину длинного вывода.

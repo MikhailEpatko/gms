@@ -9,8 +9,6 @@ import (
 	"time"
 )
 
-// ninePairsConfig — девять пар, на одну больше, чем помещается в один запрос: project2 и project1 по три окружения
-// и project3 с тремя окружениями проекта group/project2.
 const ninePairsConfig = `{
   "project2": {
     "DEV": "https://gitlab.example.com/group/project2/-/tree/dev",
@@ -29,10 +27,8 @@ const ninePairsConfig = `{
   }
 }`
 
-// project3All — вывод project3 из ninePairsConfig: окружения group/project2 под кодом project3.
 const project3All = "project3\n" + project2DevBlock + envSep + project2DemoBlock + envSep + project2ProdBlock
 
-// queryKind возвращает вид запроса glab: деплои или версии.
 func queryKind(args []string) string {
 	if strings.Contains(strings.Join(args, " "), "environment(") {
 		return "deployments"
@@ -40,9 +36,6 @@ func queryKind(args []string) string {
 	return "versions"
 }
 
-// reversedGlab отвечает на n запросов каждого вида в порядке, обратном порядку их прихода: i-й пришедший запрос
-// glab возвращает только после ответа на (i+1)-й. Если следующий запрос не пришёл за секунду, то есть запросы
-// идут не параллельно, запрос завершается ошибкой.
 func reversedGlab(glab func(args ...string) ([]byte, error), n int) func(args ...string) ([]byte, error) {
 	var mu sync.Mutex
 	arrived := map[string]int{}
@@ -73,9 +66,6 @@ func reversedGlab(glab func(args ...string) ([]byte, error), n int) func(args ..
 	}
 }
 
-// barrierGlab держит каждый запрос деплоев, пока не придут все n запросов деплоев, и так же держит запросы версий.
-// Если за секунду n запросов одного вида не собрались, то есть запросы этого вида идут не одновременно,
-// glab возвращает ошибку.
 func barrierGlab(glab func(args ...string) ([]byte, error), n int) func(args ...string) ([]byte, error) {
 	var mu sync.Mutex
 	arrived := map[string]int{}
@@ -96,8 +86,6 @@ func barrierGlab(glab func(args ...string) ([]byte, error), n int) func(args ...
 	}
 }
 
-// TestRunBatchesRequests проверяет, что glab запускается по разу на запрос деплоев и на запрос версий пачки
-// до восьми пар: каждый запуск glab дорогой.
 func TestRunBatchesRequests(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -107,7 +95,7 @@ func TestRunBatchesRequests(t *testing.T) {
 	}{
 		{name: "одна пара", config: project2DevConfig, want: project2Dev, wantCalls: 2},
 		{name: "шесть пар двух проектов", config: allPairsConfig, want: project2All + projectSep + project1All, wantCalls: 2},
-		{name: "девять пар", config: ninePairsConfig, want: project2All + projectSep + project1All + projectSep + project3All,
+		{name: "девять пар: на одну больше пачки, у project3 пути проекта project2", config: ninePairsConfig, want: project2All + projectSep + project1All + projectSep + project3All,
 			wantCalls: 4},
 	}
 	for _, tt := range tests {
@@ -158,7 +146,6 @@ func TestRunKeepsOutputOrderWhenAnswersComeReversed(t *testing.T) {
 	}
 }
 
-// TestRunRequestsBatchesConcurrently проверяет, что пачки запрашиваются одновременно: и запросы деплоев, и запросы версий.
 func TestRunRequestsBatchesConcurrently(t *testing.T) {
 	glab := barrierGlab(fakeGlab(t, testGitLab, glabFaults{}), 2)
 	code, stdout, stderr := runWithEnv(t, configEnv(t, ninePairsConfig), glab, nil)

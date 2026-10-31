@@ -25,5 +25,6 @@
 
 Связи: golangci-lint из задачи 5 встраивается в `scripts/check.sh` и должен попасть в CI без отдельного шага.
 Релизы из задачи 8 собираются в том же GitHub Actions. `scripts/check.sh` вызывает `scripts/check-secrets.sh`
-(ADR 0004), поэтому в CI нужен gitleaks в `PATH`. Скрипт проверяет правила, hook и текущие файлы, но не историю:
-`gitleaks git` по истории остаётся отдельным шагом CI. `check-secrets.sh` написан на `bash`.
+(ADR 0004) и `nocomments` (ADR 0005), поэтому в CI нужны gitleaks и nocomments в `PATH`. Скрипт проверяет
+правила, hook и текущие файлы, но не историю: `gitleaks git` по истории остаётся отдельным шагом CI.
+`check-secrets.sh` написан на `bash`.

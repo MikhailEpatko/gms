@@ -1,4 +1,3 @@
-// Команда gms показывает текущий деплой каждого окружения проектов.
 package main
 
 import (
@@ -23,18 +22,18 @@ func main() {
 	}))
 }
 
-// runGlab запускает настоящий glab и возвращает его stdout. При ошибке в неё попадает stderr glab,
-// сведённый в одну строку, чтобы он помещался в строку ошибки пары.
 func runGlab(args ...string) ([]byte, error) {
 	out, err := exec.Command("glab", args...).Output()
 	if ee, ok := errors.AsType[*exec.ExitError](err); ok {
-		// glab оформляет часть ошибок баннером «ERROR» с отступами и переносами строк.
-		msg := strings.Join(strings.Fields(string(ee.Stderr)), " ")
-		msg = strings.TrimPrefix(msg, "ERROR ")
-		msg = strings.TrimPrefix(msg, "glab: ")
-		if msg != "" {
+		if msg := oneLineGlabError(ee.Stderr); msg != "" {
 			return nil, fmt.Errorf("glab: %s", msg)
 		}
 	}
 	return out, err
+}
+
+func oneLineGlabError(stderr []byte) string {
+	msg := strings.Join(strings.Fields(string(stderr)), " ")
+	msg = strings.TrimPrefix(msg, "ERROR ")
+	return strings.TrimPrefix(msg, "glab: ")
 }

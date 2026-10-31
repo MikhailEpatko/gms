@@ -1,6 +1,4 @@
 #!/bin/sh
-# Перед коммитом проверяет индекс на секреты (gitleaks с правилами из .gitleaks.toml в корне),
-# затем запускает все проверки (scripts/check.sh) на копии индекса. Подключение: git config core.hooksPath .githooks
 set -eu
 root=$(git rev-parse --show-toplevel)
 
@@ -8,22 +6,18 @@ if ! command -v gitleaks >/dev/null 2>&1; then
 	echo "gitleaks не найден, установите: go install github.com/zricethezav/gitleaks/v8@v8.30.1" >&2
 	exit 1
 fi
-# gitleaks читает .gitleaksignore из корня, даже неотслеживаемый, и молча пропускает перечисленные в нём находки.
 if [ -e "$root/.gitleaksignore" ]; then
 	echo "удалите .gitleaksignore: исключения оформляются через gitleaks:allow в строке или allowlist своего правила в .gitleaks.toml" >&2
 	exit 1
 fi
-# Конфиг передаётся явно, чтобы GITLEAKS_CONFIG и текущий каталог не подменяли правила.
 if ! gitleaks git --pre-commit --staged --redact -v --no-banner --config "$root/.gitleaks.toml" "$root"; then
 	echo "коммит остановлен: в индексе найден секрет (см. выше)." >&2
 	echo "уберите его из индекса, а если это ложное срабатывание, добавьте gitleaks:allow в строку" >&2
 	echo "или заглушку в allowlist своего правила в .gitleaks.toml." >&2
 	exit 1
 fi
-# check.sh проверяет то, что попадёт в коммит: незастейдженные правки не мешают коммиту и не прячут сломанный индекс.
-# Шаблон явный: mktemp -d в macOS без шаблона игнорирует TMPDIR.
-tmp=$(mktemp -d "${TMPDIR:-/tmp}/gms-commit.XXXXXX")
-trap 'rm -rf "$tmp"' EXIT
+index_copy=$(mktemp -d "${TMPDIR:-/tmp}/gms-commit.XXXXXX")
+trap 'rm -rf "$index_copy"' EXIT
 trap 'exit 1' INT TERM
-git checkout-index -a --prefix="$tmp/"
-"$tmp/scripts/check.sh"
+git checkout-index -a --prefix="$index_copy/"
+"$index_copy/scripts/check.sh"
