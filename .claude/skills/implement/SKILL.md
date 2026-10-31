@@ -19,4 +19,6 @@ Run typechecking regularly, single test files regularly, and the full test suite
 
 Once done, call the Skill tool with "review" to review the work.
 
+Before closing the ticket, run the **ADR pass** over the diff: every ADR in `docs/adr/` whose decision or consequences the diff changes is edited in place; every decision made during implementation that meets the three criteria in `.claude/skills/domain-modeling/ADR-FORMAT.md` gets a new ADR. The pass is done when each ADR is either updated or confirmed unaffected.
+
 Close the ticket in its file: set `**Status:** done` and tick the acceptance criteria the work meets. Leave the work and the updated ticket file uncommitted: the user commits. Commit only when the user asks.

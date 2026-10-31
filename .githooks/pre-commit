@@ -1,6 +1,6 @@
 #!/bin/sh
 # Перед коммитом проверяет индекс на секреты (gitleaks с правилами из .gitleaks.toml в корне),
-# затем запускает все проверки кода (scripts/check.sh). Подключение: git config core.hooksPath .githooks
+# затем запускает все проверки (scripts/check.sh) на копии индекса. Подключение: git config core.hooksPath .githooks
 set -eu
 root=$(git rev-parse --show-toplevel)
 
@@ -20,4 +20,10 @@ if ! gitleaks git --pre-commit --staged --redact -v --no-banner --config "$root/
 	echo "или заглушку в allowlist своего правила в .gitleaks.toml." >&2
 	exit 1
 fi
-exec "$root/scripts/check.sh"
+# check.sh проверяет то, что попадёт в коммит: незастейдженные правки не мешают коммиту и не прячут сломанный индекс.
+# Шаблон явный: mktemp -d в macOS без шаблона игнорирует TMPDIR.
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/gms-commit.XXXXXX")
+trap 'rm -rf "$tmp"' EXIT
+trap 'exit 1' INT TERM
+git checkout-index -a --prefix="$tmp/"
+"$tmp/scripts/check.sh"

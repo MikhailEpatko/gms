@@ -64,15 +64,19 @@ Each smell reads *what it is* → *how to fix*; match it against the diff:
 
 Issue both sub-agent calls together, in the foreground, and aggregate the reports they return.
 
+The **probe kit** is the commands that exercise the change (the repo's check script, acceptance or probe scripts the implementer ran) with the absolute path of every binary they need. A sub-agent that wants to test a claim runs these, so it probes with the implementer's tools and stays inside the repository and its scratch directories.
+
 **Standards sub-agent prompt** should include:
 
 - The full diff command, the untracked-file list, and the commit list.
+- The probe kit.
 - The list of standards-source files you found in step 3, **plus the smell baseline from step 3** pasted in full (the sub-agent has no other access to it).
 - The brief: "Report, per file/hunk where relevant, (a) every place the diff violates a documented standard: cite the standard (file + the rule); and (b) any baseline smell you spot: name it and quote the hunk. Distinguish hard violations from judgement calls: documented-standard breaches can be hard, but baseline smells are always judgement calls, and a documented repo standard overrides the baseline. Skip anything tooling enforces. Under 400 words."
 
 **Spec sub-agent prompt** should include:
 
 - The diff command, the untracked-file list, and the commit list.
+- The probe kit.
 - The path or fetched contents of the spec.
 - The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. Under 400 words."
 

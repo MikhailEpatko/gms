@@ -24,5 +24,6 @@
   релиза gitleaks v8.30.1 и `gitleaks git` по пушнутому диапазону или всей истории (0,7 с).
 
 Связи: golangci-lint из задачи 5 встраивается в `scripts/check.sh` и должен попасть в CI без отдельного шага.
-Релизы из задачи 8 собираются в том же GitHub Actions. Проверка секретов из задачи 9 живёт в pre-commit hook, а не в
-`scripts/check.sh`, поэтому в CI нужен отдельный шаг.
+Релизы из задачи 8 собираются в том же GitHub Actions. `scripts/check.sh` вызывает `scripts/check-secrets.sh`
+(ADR 0004), поэтому в CI нужен gitleaks в `PATH`. Скрипт проверяет правила, hook и текущие файлы, но не историю:
+`gitleaks git` по истории остаётся отдельным шагом CI. `check-secrets.sh` написан на `bash`.

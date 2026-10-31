@@ -86,18 +86,18 @@ gms          # без конфига напечатает пример, сохр
 ```bash
 git clone https://github.com/MikhailEpatko/gms.git
 cd gms
-scripts/check.sh   # gofmt, vet, тесты
+go install github.com/zricethezav/gitleaks/v8@v8.30.1   # или brew install gitleaks: нужен check.sh и hook
+scripts/check.sh   # gofmt, vet, тесты, защита от секретов
 go install .
 ```
 
-Перед первым коммитом подключите pre-commit hook и поставьте gitleaks:
+Перед первым коммитом подключите pre-commit hook:
 
 ```bash
 git config core.hooksPath .githooks
-go install github.com/zricethezav/gitleaks/v8@v8.30.1   # или brew install gitleaks
 ```
 
-Hook сначала проверяет индекс на секреты (gitleaks с правилами из `.gitleaks.toml`) и не пустит коммит с секретом, затем запускает `scripts/check.sh`. Без gitleaks в `PATH` коммит тоже не пройдёт. Push protection на GitHub — второй рубеж только для токенов известных провайдеров.
+Hook сначала проверяет индекс на секреты (gitleaks с правилами из `.gitleaks.toml`) и не пустит коммит с секретом, затем запускает `scripts/check.sh` на копии индекса: проверяется ровно то, что попадёт в коммит, а незастейдженные правки не мешают. Без gitleaks в `PATH` коммит тоже не пройдёт. `scripts/check.sh` через `scripts/check-secrets.sh` проверяет правила gitleaks на случаях, сам hook и все файлы репозитория. Push protection на GitHub — второй рубеж только для токенов известных провайдеров.
 
 ### Проверка
 
@@ -140,7 +140,7 @@ project2
 Путь: `~/.config/gms/config.json`, переопределяется через env `GMS_CONFIG`. Домашний каталог берётся из `HOME`, а если он не задан, из `os.UserHomeDir()` (в Windows это `%USERPROFILE%`). Если не удалось определить ни `GMS_CONFIG`, ни домашний каталог, это ошибка, exit 1.
 Конфиг - это JSON вида `{ "<код проекта>": { "<ОКРУЖЕНИЕ>": "<url ветки>" } }`, URL вида `https://gitlab.example.com/group/<repo>/-/tree/<branch>`. 
 Из URL извлекаются хост, путь проекта в GitLab и ветка окружения. Окружения произвольные, берутся из ключей. 
-Если файла конфига нет, `gms` печатает «создайте ~/.config/gms/config.json» и пример конфига.
+Если файла конфига нет, `gms` печатает «создайте ~/.config/gms/config.json» и пример конфига с обезличенными URL (`gitlab.example.com`), exit ≠ 0.
 
 ### Откуда берутся данные
 
