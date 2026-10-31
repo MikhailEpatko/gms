@@ -1,3 +1,23 @@
 #!/bin/sh
-# Перед коммитом запускает все проверки. Подключение: git config core.hooksPath .githooks
-exec "$(git rev-parse --show-toplevel)/scripts/check.sh"
+# Перед коммитом проверяет индекс на секреты (gitleaks с правилами из .gitleaks.toml в корне),
+# затем запускает все проверки кода (scripts/check.sh). Подключение: git config core.hooksPath .githooks
+set -eu
+root=$(git rev-parse --show-toplevel)
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+	echo "gitleaks не найден, установите: go install github.com/zricethezav/gitleaks/v8@v8.30.1" >&2
+	exit 1
+fi
+# gitleaks читает .gitleaksignore из корня, даже неотслеживаемый, и молча пропускает перечисленные в нём находки.
+if [ -e "$root/.gitleaksignore" ]; then
+	echo "удалите .gitleaksignore: исключения оформляются через gitleaks:allow в строке или allowlist своего правила в .gitleaks.toml" >&2
+	exit 1
+fi
+# Конфиг передаётся явно, чтобы GITLEAKS_CONFIG и текущий каталог не подменяли правила.
+if ! gitleaks git --pre-commit --staged --redact -v --no-banner --config "$root/.gitleaks.toml" "$root"; then
+	echo "коммит остановлен: в индексе найден секрет (см. выше)." >&2
+	echo "уберите его из индекса, а если это ложное срабатывание, добавьте gitleaks:allow в строку" >&2
+	echo "или заглушку в allowlist своего правила в .gitleaks.toml." >&2
+	exit 1
+fi
+exec "$root/scripts/check.sh"

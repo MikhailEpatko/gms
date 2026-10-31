@@ -90,6 +90,15 @@ scripts/check.sh   # gofmt, vet, тесты
 go install .
 ```
 
+Перед первым коммитом подключите pre-commit hook и поставьте gitleaks:
+
+```bash
+git config core.hooksPath .githooks
+go install github.com/zricethezav/gitleaks/v8@v8.30.1   # или brew install gitleaks
+```
+
+Hook сначала проверяет индекс на секреты (gitleaks с правилами из `.gitleaks.toml`) и не пустит коммит с секретом, затем запускает `scripts/check.sh`. Без gitleaks в `PATH` коммит тоже не пройдёт. Push protection на GitHub — второй рубеж только для токенов известных провайдеров.
+
 ### Проверка
 
 ```bash

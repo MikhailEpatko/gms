@@ -11,13 +11,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Команды
 
 ```bash
-scripts/check.sh             # все проверки: gofmt, vet, go test -race; работа готова, только когда он прошёл
+scripts/check.sh             # все проверки кода: gofmt, vet, go test -race; работа готова, только когда он прошёл
 go build -o gms .            # сборка бинарника
 go run . -p project1,project2         # запуск без сборки
 go test ./internal/gms -run TestName -v   # один тест
 ```
 
-Тот же `scripts/check.sh` запускает pre-commit hook из `.githooks/`. В новом клоне hook подключается командой `git config core.hooksPath .githooks`.
+Pre-commit hook из `.githooks/` сначала проверяет индекс на секреты (gitleaks с правилами `.gitleaks.toml` из корня), затем запускает тот же `scripts/check.sh`. В новом клоне hook подключается командой `git config core.hooksPath .githooks`, а gitleaks ставится по README.
+
+Когда hook нашёл секрет, агент останавливается и сообщает пользователю файл, строку и `RuleID`, не повторяя сам секрет. Исключение (`gitleaks:allow` в строке или заглушка в `allowlist` своего правила в `.gitleaks.toml`) появляется только после того, как пользователь подтвердил ложное срабатывание. Hook — жёсткий барьер: агент коммитит только через него, без `--no-verify`, подмены `core.hooksPath`, `.gitleaksignore` и правок hook или конфига ради обхода.
 
 Агент проверяет файлы, запускает отдельные тесты и ищет вызовы через MCP GoLand и LSP по `.claude/rules/goland-mcp.md`, а Bash нужен для `scripts/check.sh` и прогонов с `-race`.
 
