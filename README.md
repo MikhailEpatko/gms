@@ -89,8 +89,9 @@ gms          # без конфига напечатает пример, сохр
 git clone https://github.com/MikhailEpatko/gms.git
 cd gms
 go install github.com/zricethezav/gitleaks/v8@v8.30.1   # или brew install gitleaks: нужен check.sh и hook
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0   # или brew install golangci-lint: нужен check.sh и hook
 go install github.com/MikhailEpatko/nocomments@latest   # нужен check.sh и hook
-scripts/check.sh   # gofmt, код без комментариев, vet, тесты, защита от секретов
+scripts/check.sh   # gofmt, код без комментариев, vet, линтер, тесты, защита от секретов
 go install .
 ```
 
@@ -100,9 +101,9 @@ go install .
 git config core.hooksPath .githooks
 ```
 
-Hook сначала проверяет индекс на секреты (gitleaks с правилами из `.gitleaks.toml`) и не пустит коммит с секретом, затем запускает `scripts/check.sh` на копии индекса: проверяется ровно то, что попадёт в коммит, а незастейдженные правки не мешают. Без gitleaks и nocomments в `PATH` коммит тоже не пройдёт. `scripts/check.sh` через `scripts/check-secrets.sh` проверяет правила gitleaks на случаях, сам hook и все файлы репозитория. Push protection на GitHub — второй рубеж только для токенов известных провайдеров.
+Hook сначала проверяет индекс на секреты (gitleaks с правилами из `.gitleaks.toml`) и не пустит коммит с секретом, затем запускает `scripts/check.sh` на копии индекса: проверяется ровно то, что попадёт в коммит, а незастейдженные правки не мешают. Без gitleaks, nocomments и golangci-lint в `PATH` коммит тоже не пройдёт. `scripts/check.sh` через `scripts/check-secrets.sh` проверяет правила gitleaks на случаях, сам hook и все файлы репозитория. Push protection на GitHub — второй рубеж только для токенов известных провайдеров.
 
-Те же проверки гоняет GitHub Actions: `scripts/check.sh` запускается на каждый push в `main` и каждый pull request на Ubuntu и macOS; статус — бейдж вверху README. Gitleaks и nocomments CI ставит теми же командами `go install`. Отдельный job сканирует всю историю коммитов `gitleaks git`'ом: hook и `check.sh` видят только текущий коммит, а секрет в старом — например, от коммита с `--no-verify` или правки через веб-интерфейс — ловится CI.
+Те же проверки гоняет GitHub Actions: `scripts/check.sh` запускается на каждый push в `main` и каждый pull request на Ubuntu и macOS; статус — бейдж вверху README. Gitleaks, nocomments и golangci-lint CI ставит теми же командами `go install`. Отдельный job сканирует всю историю коммитов `gitleaks git`'ом: hook и `check.sh` видят только текущий коммит, а секрет в старом — например, от коммита с `--no-verify` или правки через веб-интерфейс — ловится CI.
 
 ### Проверка
 
