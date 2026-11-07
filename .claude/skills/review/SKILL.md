@@ -1,6 +1,6 @@
 ---
 name: review
-description: "Review the changes since a fixed point (commit, branch, tag, or merge-base; uncommitted changes included) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\"."
+description: "Review the changes since a fixed point (commit, branch, tag, or merge-base; uncommitted changes included) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). Runs both reviews one after the other and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\"."
 ---
 
 Two-axis review of the diff between the working tree and a fixed point, so uncommitted changes are always part of the review:
@@ -8,7 +8,7 @@ Two-axis review of the diff between the working tree and a fixed point, so uncom
 - **Standards**: does the code conform to this repo's documented coding standards?
 - **Spec**: does the code faithfully implement the originating issue / spec?
 
-Both axes run as **parallel sub-agents** so they don't pollute each other's context, then this skill aggregates their findings.
+Both axes run **one after the other in this session**, each finished and written down before the next starts so one doesn't colour the other, then this skill aggregates their findings.
 
 ## Process
 
@@ -21,12 +21,12 @@ Run every command in this skill from the repository root: `cd "$(git rev-parse -
 Capture the change set once:
 
 - **Diff command**: `git diff $(git merge-base <fixed-point> HEAD)`, which compares the merge-base with the working tree, staged and unstaged edits included.
-- **Untracked files**: `git ls-files --others --exclude-standard`. They are new files the diff leaves out; the sub-agents read them in full.
+- **Untracked files**: `git ls-files --others --exclude-standard`. They are new files the diff leaves out; both axes read them in full.
 - **Commit list**: `git log <fixed-point>..HEAD --oneline`, empty when the fixed point is `HEAD`.
 
 In a repository with no commits yet, `HEAD` does not resolve: the change set is every untracked and staged file, with no diff command and no commit list.
 
-Before going further, confirm the fixed point resolves (`git rev-parse <fixed-point>`) and the change set is non-empty. A bad ref or an empty change set should fail here, not inside two parallel sub-agents.
+Before going further, confirm the fixed point resolves (`git rev-parse <fixed-point>`) and the change set is non-empty. A bad ref or an empty change set should fail here, not halfway through a review.
 
 ### 2. Identify the spec source
 
@@ -34,7 +34,7 @@ Look for the originating spec, in this order:
 
 1. A path the user passed as an argument.
 2. `ai/<N>/spec.md` for the task being implemented, or a spec file under `docs/`, `specs/`, or `.scratch/` matching the branch name or feature.
-3. If nothing is found, ask the user where the spec is. If they say there isn't one, the **Spec** sub-agent will skip and report "no spec available".
+3. If nothing is found, ask the user where the spec is. If they say there isn't one, the **Spec** axis skips and reports "no spec available".
 
 ### 3. Identify the standards sources
 
@@ -60,27 +60,27 @@ Each smell reads *what it is* → *how to fix*; match it against the diff:
 - **Middle Man**: a class or function that mostly just delegates onward. → cut it, call the real target direct.
 - **Refused Bequest**: a subclass or implementer that ignores or overrides most of what it inherits. → drop the inheritance, use composition.
 
-### 4. Spawn both sub-agents in parallel
+### 4. Run both axes in turn
 
-Issue both sub-agent calls together, in the foreground, and aggregate the reports they return.
+Run **Standards** first, then **Spec**. Write out each axis's report in full before starting the next, and don't revise it after seeing the other axis's findings.
 
-The **probe kit** is the commands that exercise the change (the repo's check script, acceptance or probe scripts the implementer ran) with the absolute path of every binary they need. A sub-agent that wants to test a claim runs these, so it probes with the implementer's tools and stays inside the repository and its scratch directories.
+The **probe kit** is the commands that exercise the change (the repo's check script, acceptance or probe scripts the implementer ran) with the absolute path of every binary they need. To test a claim, run these, so you probe with the implementer's tools and stay inside the repository and its scratch directories.
 
-**Standards sub-agent prompt** should include:
+**Standards axis** works from:
 
 - The full diff command, the untracked-file list, and the commit list.
 - The probe kit.
-- The list of standards-source files you found in step 3, **plus the smell baseline from step 3** pasted in full (the sub-agent has no other access to it).
+- The list of standards-source files you found in step 3, **plus the smell baseline from step 3**.
 - The brief: "Report, per file/hunk where relevant, (a) every place the diff violates a documented standard: cite the standard (file + the rule); and (b) any baseline smell you spot: name it and quote the hunk. Distinguish hard violations from judgement calls: documented-standard breaches can be hard, but baseline smells are always judgement calls, and a documented repo standard overrides the baseline. Skip anything tooling enforces. Under 400 words."
 
-**Spec sub-agent prompt** should include:
+**Spec axis** works from:
 
 - The diff command, the untracked-file list, and the commit list.
 - The probe kit.
 - The path or fetched contents of the spec.
 - The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. Under 400 words."
 
-If the spec is missing, skip the Spec sub-agent and note this in the final report.
+If the spec is missing, skip the Spec axis and note this in the final report.
 
 ### 5. Aggregate
 
