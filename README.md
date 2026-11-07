@@ -9,13 +9,52 @@ CLI, который для каждого проекта и каждого ок�
 ### Системные требования
 
 - macOS, Linux или Windows (amd64 или arm64).
-- [Go](https://go.dev/dl/) 1.27 или новее, нужен только для сборки.
 - [glab](https://gitlab.com/gitlab-org/cli#installation), официальный CLI GitLab. `gms` вызывает его как подпроцесс, поэтому `glab` должен быть в `PATH` и залогинен в нужный GitLab с токеном не ниже `read_api`.
 - Сетевой доступ к GitLab-инстансу из конфига.
 
-Готовых бинарников нет, `gms` ставится через `go install` и собирается из исходников. Бинарник попадает в `$(go env GOPATH)/bin` (по умолчанию `~/go/bin`, в Windows `%USERPROFILE%\go\bin`).
+[Go](https://go.dev/dl/) 1.27 или новее нужен только для установки из исходников — разделы «Из исходников (`go install`)» и «Сборка из клона». Для готового бинарника из релиза Go не требуется.
 
-### macOS
+### Из релизов
+
+Готовые бинарники для всех платформ из «Системных требований» публикуются в [GitHub Releases](https://github.com/MikhailEpatko/gms/releases/latest). Скачайте из последнего релиза файл под свою платформу и `checksums.txt`:
+
+| Платформа | Файл |
+|---|---|
+| macOS Intel | `gms-darwin-amd64` |
+| macOS Apple Silicon | `gms-darwin-arm64` |
+| Linux amd64 | `gms-linux-amd64` |
+| Linux arm64 | `gms-linux-arm64` |
+| Windows amd64 | `gms-windows-amd64.exe` |
+| Windows arm64 | `gms-windows-arm64.exe` |
+
+`checksums.txt` содержит SHA-256 всех файлов релиза. Положите скачанные файлы в один каталог и проверьте:
+
+```bash
+shasum -a 256 -c checksums.txt   # macOS, Linux
+```
+
+```powershell
+Get-FileHash gms-windows-amd64.exe   # Windows: сравните хеш со строкой файла в checksums.txt
+```
+
+macOS и Linux — сделать бинарник исполняемым и положить в каталог из `PATH` (пример с `/usr/local/bin`, подставьте свой файл и каталог):
+
+```bash
+chmod +x gms-darwin-arm64
+sudo mv gms-darwin-arm64 /usr/local/bin/gms
+```
+
+Windows (PowerShell) — положить `gms-windows-amd64.exe` в каталог из `PATH` под именем `gms.exe`.
+
+Бинарники релиза не подписаны. macOS помечает файл, скачанный браузером, карантином `com.apple.quarantine`, и Gatekeeper может не пустить его при первом запуске: снимите карантин командой `xattr -d com.apple.quarantine /usr/local/bin/gms` либо разрешите запуск в «Системных настройках → Конфиденциальность и безопасность».
+
+Дальше как при любой установке: `glab auth login --hostname gitlab.example.com`, затем конфиг `~/.config/gms/config.json` — `gms` без конфига напечатает пример (раздел «Конфиг»).
+
+### Из исходников (`go install`)
+
+`go install` собирает `gms` из исходников и кладёт бинарник в `$(go env GOPATH)/bin` (по умолчанию `~/go/bin`, в Windows `%USERPROFILE%\go\bin`) — убедитесь, что каталог есть в `PATH`.
+
+#### macOS
 
 ```bash
 # 1. Зависимости
@@ -37,7 +76,7 @@ mkdir -p ~/.config/gms
 gms          # без конфига напечатает пример, сохраните его в ~/.config/gms/config.json
 ```
 
-### Linux
+#### Linux
 
 ```bash
 # 1. Зависимости
@@ -61,7 +100,7 @@ mkdir -p ~/.config/gms
 gms          # без конфига напечатает пример, сохраните его в ~/.config/gms/config.json
 ```
 
-### Windows
+#### Windows
 
 Команды для PowerShell.
 
