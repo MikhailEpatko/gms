@@ -4,9 +4,9 @@
 
 **Blocked by:** 1 (CI гоняет check.sh на push в main и на PR, бейдж в README), 2 (Скан всей истории gitleaks — job secrets-history) — нужны все три имени чеков и их зелёные прогоны.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] В required status checks включены ровно три чека: `check (ubuntu-latest)`, `check (macos-latest)`, `secrets-history`.
-- [ ] Прямые push в `main` запрещены, правило действует и для администраторов.
-- [ ] Попытка прямого push в `main` отклоняется GitHub с сообщением про protection rules.
-- [ ] Слияние PR, у которого хотя бы один из трёх чеков красный или не пришёл, блокируется.
+- [x] В required status checks включены ровно три чека: `check (ubuntu-latest)`, `check (macos-latest)`, `secrets-history`. _(включено через gh api, подтверждено ответом API)_
+- [x] Прямые push в `main` запрещены, правило действует и для администраторов. _(enforce_admins: true; контрольный push шёл админ-токеном)_
+- [x] Попытка прямого push в `main` отклоняется GitHub с сообщением про protection rules. _(GH006 «Changes must be made through a pull request», «3 of 3 required status checks are expected»)_
+- [ ] Слияние PR, у которого хотя бы один из трёх чеков красный или не пришёл, блокируется. _(нужен красный тестовый PR — общий с красным критерием тикета 2)_
