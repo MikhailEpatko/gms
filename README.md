@@ -102,7 +102,7 @@ git config core.hooksPath .githooks
 
 Hook сначала проверяет индекс на секреты (gitleaks с правилами из `.gitleaks.toml`) и не пустит коммит с секретом, затем запускает `scripts/check.sh` на копии индекса: проверяется ровно то, что попадёт в коммит, а незастейдженные правки не мешают. Без gitleaks и nocomments в `PATH` коммит тоже не пройдёт. `scripts/check.sh` через `scripts/check-secrets.sh` проверяет правила gitleaks на случаях, сам hook и все файлы репозитория. Push protection на GitHub — второй рубеж только для токенов известных провайдеров.
 
-Те же проверки гоняет GitHub Actions: `scripts/check.sh` запускается на каждый push в `main` и каждый pull request на Ubuntu и macOS; статус — бейдж вверху README. Gitleaks и nocomments CI ставит теми же командами `go install`.
+Те же проверки гоняет GitHub Actions: `scripts/check.sh` запускается на каждый push в `main` и каждый pull request на Ubuntu и macOS; статус — бейдж вверху README. Gitleaks и nocomments CI ставит теми же командами `go install`. Отдельный job сканирует всю историю коммитов `gitleaks git`'ом: hook и `check.sh` видят только текущий коммит, а секрет в старом — например, от коммита с `--no-verify` или правки через веб-интерфейс — ловится CI.
 
 ### Проверка
 
