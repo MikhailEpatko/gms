@@ -11,13 +11,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Команды
 
 ```bash
-scripts/check.sh             # все проверки: gofmt, без комментариев (ADR 0005), vet, go test -race, защита от секретов; нужны gitleaks и nocomments; работа готова, только когда он прошёл
+scripts/check.sh             # все проверки: gofmt, без комментариев (ADR 0005), vet, golangci-lint, go test -race, защита от секретов; нужны gitleaks, nocomments и golangci-lint; работа готова, только когда он прошёл
 go build -o gms .            # сборка бинарника
 go run . -p project1,project2         # запуск без сборки
 go test ./internal/gms -run TestName -v   # один тест
 ```
 
-Pre-commit hook из `.githooks/` сначала проверяет индекс на секреты (gitleaks с правилами `.gitleaks.toml` из корня), затем запускает тот же `scripts/check.sh` на копии индекса (ADR 0004), поэтому файл, нужный тестам, должен быть в индексе. В новом клоне hook подключается командой `git config core.hooksPath .githooks`, а gitleaks и nocomments ставятся по README.
+Pre-commit hook из `.githooks/` сначала проверяет индекс на секреты (gitleaks с правилами `.gitleaks.toml` из корня), затем запускает тот же `scripts/check.sh` на копии индекса (ADR 0004), поэтому файл, нужный тестам, должен быть в индексе. В новом клоне hook подключается командой `git config core.hooksPath .githooks`, а gitleaks, nocomments и golangci-lint ставятся по README.
 
 Когда hook или `check.sh` нашли секрет, агент останавливается и сообщает пользователю файл, строку и `RuleID`, не повторяя сам секрет. Выдуманный пример в документе или тесте агент переписывает на заглушки, которые правила пропускают (`<host>`, `example.com`, `$PROXY_PASSWORD`), или описывает словами без полного URL. Исключение (`gitleaks:allow` в строке или заглушка в `allowlist` своего правила в `.gitleaks.toml`) ставится только на строку, которую так не переписать, и только после того, как пользователь подтвердил ложное срабатывание именно этой строки. Hook — жёсткий барьер: агент коммитит только через него, без `--no-verify`, подмены `core.hooksPath`, `.gitleaksignore` и правок hook или конфига ради обхода.
 
