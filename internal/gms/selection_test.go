@@ -16,27 +16,27 @@ func TestRunSelectsProjects(t *testing.T) {
 		{
 			name: "без флагов все проекты в порядке конфига",
 			args: nil,
-			want: project2Dev + projectSep + project1Dev,
+			want: project2Dev + project1Dev,
 		},
 		{
 			name: "-c=false не мешает выводу",
 			args: []string{"-c=false"},
-			want: project2Dev + projectSep + project1Dev,
+			want: project2Dev + project1Dev,
 		},
 		{
 			name: "с -p проекты в порядке аргументов",
 			args: []string{"-p", "project1,project2"},
-			want: project1Dev + projectSep + project2Dev,
+			want: project1Dev + project2Dev,
 		},
 		{
 			name: "пробелы вокруг кодов обрезаются",
 			args: []string{"-p", " project1 , project2 "},
-			want: project1Dev + projectSep + project2Dev,
+			want: project1Dev + project2Dev,
 		},
 		{
 			name: "пустой элемент в середине пропускается",
 			args: []string{"-p", "project1,,project2"},
-			want: project1Dev + projectSep + project2Dev,
+			want: project1Dev + project2Dev,
 		},
 		{
 			name: "пустой элемент в конце пропускается",
@@ -46,12 +46,12 @@ func TestRunSelectsProjects(t *testing.T) {
 		{
 			name: "повторный флаг накапливает коды",
 			args: []string{"-p", "project1", "-p", "project2"},
-			want: project1Dev + projectSep + project2Dev,
+			want: project1Dev + project2Dev,
 		},
 		{
 			name: "повторы кода схлопываются по первому вхождению",
 			args: []string{"-p", "project1,project2,project1", "-p", "project2"},
-			want: project1Dev + projectSep + project2Dev,
+			want: project1Dev + project2Dev,
 		},
 	}
 	for _, tt := range tests {
@@ -71,76 +71,75 @@ func TestRunSelectsEnvironments(t *testing.T) {
 		{
 			name: "окружения всех проектов",
 			args: []string{"-e", "DEV,DEMO"},
-			want: "project2\n" + project2DevBlock + envSep + project2DemoBlock +
-				projectSep + "project1\n" + project1DevBlock + envSep + project1DemoBlock,
+			want: project2Dev + project2Demo + project1Dev + project1Demo,
 		},
 		{
 			name: "одно окружение одного проекта",
 			args: []string{"-e", "PROD", "-p", "project1"},
-			want: "project1\n" + project1ProdBlock,
+			want: project1Prod,
 		},
 		{
 			name: "окружения в порядке аргументов",
 			args: []string{"-e", "PROD,DEV", "-p", "project1"},
-			want: "project1\n" + project1ProdBlock + envSep + project1DevBlock,
+			want: project1Prod + project1Dev,
 		},
 		{
 			name: "проекты в порядке -p",
 			args: []string{"-e", "DEV", "-p", "project1,project2"},
-			want: "project1\n" + project1DevBlock + projectSep + "project2\n" + project2DevBlock,
+			want: project1Dev + project2Dev,
 		},
 		{
 			name: "имя без учёта регистра, в выводе как в конфиге",
 			args: []string{"-e", "prod,Demo", "-p", "project1"},
-			want: "project1\n" + project1ProdBlock + envSep + project1DemoBlock,
+			want: project1Prod + project1Demo,
 		},
 		{
 			name: "пробелы вокруг имён обрезаются",
 			args: []string{"-e", " PROD , DEV ", "-p", "project1"},
-			want: "project1\n" + project1ProdBlock + envSep + project1DevBlock,
+			want: project1Prod + project1Dev,
 		},
 		{
 			name: "пустые элементы пропускаются",
 			args: []string{"-e", "PROD,,DEV,", "-p", "project1"},
-			want: "project1\n" + project1ProdBlock + envSep + project1DevBlock,
+			want: project1Prod + project1Dev,
 		},
 		{
 			name: "повторный флаг накапливает имена",
 			args: []string{"-e", "PROD", "-e", "DEV", "-p", "project1"},
-			want: "project1\n" + project1ProdBlock + envSep + project1DevBlock,
+			want: project1Prod + project1Dev,
 		},
 		{
 			name: "повторы схлопываются по первому вхождению без учёта регистра",
 			args: []string{"-e", "dev,DEMO,DEV", "-e", "demo", "-p", "project1"},
-			want: "project1\n" + project1DevBlock + envSep + project1DemoBlock,
+			want: project1Dev + project1Demo,
 		},
 		{
 			name: "запись -e=",
 			args: []string{"-e=PROD", "-p", "project1"},
-			want: "project1\n" + project1ProdBlock,
+			want: project1Prod,
 		},
 		{
 			name: "запись --e",
 			args: []string{"--e", "PROD", "-p", "project1"},
-			want: "project1\n" + project1ProdBlock,
+			want: project1Prod,
 		},
 		{
 			name:   "проект без окружения не выводится",
 			config: project2WithoutDemoConfig,
 			args:   []string{"-e", "DEMO"},
-			want:   "project1\n" + project1DemoBlock,
+			want:   project1Demo,
 		},
 		{
 			name:   "проект без окружения не выводится и при -p",
 			config: project2WithoutDemoConfig,
 			args:   []string{"-e", "DEMO", "-p", "project2,project1"},
-			want:   "project1\n" + project1DemoBlock,
+			want:   project1Demo,
 		},
 		{
 			name:   "у проекта выводятся только его окружения из -e",
 			config: project2WithoutDemoConfig,
 			args:   []string{"-e", "DEMO,PROD"},
-			want:   "project2\n" + project2ProdBlock + projectSep + "project1\n" + project1DemoBlock + envSep + project1ProdBlock,
+			want:   project2Prod + project1Demo + project1Prod,
 		},
 	}
 	for _, tt := range tests {
@@ -160,13 +159,13 @@ func TestRunRequestsOnlySelectedPairs(t *testing.T) {
 		{
 			name:          "окружение всех проектов",
 			args:          []string{"-e", "PROD"},
-			want:          "project2\n" + project2ProdBlock + projectSep + "project1\n" + project1ProdBlock,
+			want:          project2Prod + project1Prod,
 			wantRequested: []string{"group/project1 prod", "group/project2 prod"},
 		},
 		{
 			name:          "окружения одного проекта",
 			args:          []string{"-e", "demo,prod", "-p", "project1"},
-			want:          "project1\n" + project1DemoBlock + envSep + project1ProdBlock,
+			want:          project1Demo + project1Prod,
 			wantRequested: []string{"group/project1 demo", "group/project1 prod"},
 		},
 	}

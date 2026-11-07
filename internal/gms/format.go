@@ -11,42 +11,25 @@ import (
 
 const dateLayout = "2006-01-02 15:04:05 MST"
 
-var (
-	envRule     = strings.Repeat("-", 63)
-	projectRule = strings.Repeat("=", 63)
-)
-
 type formatter struct {
 	w   io.Writer
 	loc *time.Location
 }
 
-func (f formatter) projectHeader(code string) {
-	_, _ = fmt.Fprintln(f.w, code)
-}
-
-func (f formatter) projectSeparator() {
-	_, _ = fmt.Fprintf(f.w, "\n\n%s\n", projectRule)
-}
-
-func (f formatter) envSeparator() {
-	_, _ = fmt.Fprintf(f.w, "\n%s\n", envRule)
-}
-
-func (f formatter) pair(env Environment, r pairResult) {
+func (f formatter) pair(code string, env Environment, r pairResult) {
 	switch {
 	case r.deploymentErr != nil:
-		_, _ = fmt.Fprintf(f.w, "%s:\nошибка: %s\n", env.Name, r.deploymentErr)
+		_, _ = fmt.Fprintf(f.w, "%s %s ошибка: %s\n", code, env.Name, r.deploymentErr)
 	case r.deployment == nil:
-		_, _ = fmt.Fprintf(f.w, "%s:\nнет деплоев\n", env.Name)
+		_, _ = fmt.Fprintf(f.w, "%s %s нет деплоев\n", code, env.Name)
 	default:
 		d := r.deployment
 		version := r.version
 		if r.versionErr != nil {
 			version = "версия: ошибка (" + r.versionErr.Error() + ")"
 		}
-		_, _ = fmt.Fprintf(f.w, "%s:\n%s%s\n%s\n%s %s\n",
-			env.Name, d.FinishedAt.In(f.loc).Format(dateLayout), d.mark(env.Branch), version, d.ShortID, d.Title)
+		_, _ = fmt.Fprintf(f.w, "%s %s %s %s %s %s%s\n",
+			code, env.Name, d.FinishedAt.In(f.loc).Format(dateLayout), version, d.ShortID, d.Title, d.mark(env.Branch))
 	}
 }
 

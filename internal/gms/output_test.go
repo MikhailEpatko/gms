@@ -17,7 +17,7 @@ func TestRunShowsCurrentDeploymentOfProject(t *testing.T) {
 			config: project2DevConfig,
 			gl:     testGitLab,
 			args:   []string{"-p", "project2"},
-			want:   project2Dev,
+			want:   "project2 DEV 2026-09-24 16:35:33 MSK 7.0.2 1abfac43 Merge branch 'XXXXX-3488' into 'dev'\n",
 		},
 		{
 			name:   "окружения разделены линией",
@@ -40,7 +40,7 @@ func TestRunShowsCurrentDeploymentOfProject(t *testing.T) {
 }`,
 			gl:   testGitLab,
 			args: []string{"-p", "project1"},
-			want: "project1\n" + project1ProdBlock + envSep + project1DevBlock + envSep + project1DemoBlock,
+			want: project1Prod + project1Dev + project1Demo,
 		},
 		{
 			name: "проекты на разных хостах",
@@ -56,7 +56,7 @@ func TestRunShowsCurrentDeploymentOfProject(t *testing.T) {
 				"group/project2": onHost(testGitLab["group/project2"], "gitlab.example.com"),
 				"group/project1": onHost(testGitLab["group/project1"], "gitlab.example.org"),
 			},
-			want: project2Dev + projectSep + project1Dev,
+			want: project2Dev + project1Dev,
 		},
 	}
 	for _, tt := range tests {
@@ -75,32 +75,17 @@ func TestRunMarksDeploymentRef(t *testing.T) {
 		{
 			name:    "деплой из MR",
 			fixture: "synthetic/last-deployment-mr.json",
-			want: `project2
-DEV:
-2026-09-24 16:35:33 MSK (MR !23)
-7.0.2
-1abfac43 Merge branch 'XXXXX-3488' into 'dev'
-`,
+			want:    "project2 DEV 2026-09-24 16:35:33 MSK 7.0.2 1abfac43 Merge branch 'XXXXX-3488' into 'dev' (MR !23)\n",
 		},
 		{
 			name:    "деплой из merged results pipeline MR",
 			fixture: "synthetic/last-deployment-mr-merge.json",
-			want: `project2
-DEV:
-2026-09-24 16:35:33 MSK (MR !23)
-7.0.2
-1abfac43 Merge branch 'XXXXX-3488' into 'dev'
-`,
+			want:    "project2 DEV 2026-09-24 16:35:33 MSK 7.0.2 1abfac43 Merge branch 'XXXXX-3488' into 'dev' (MR !23)\n",
 		},
 		{
 			name:    "деплой из чужой ветки",
 			fixture: "synthetic/last-deployment-ci.json",
-			want: `project2
-DEV:
-2026-09-24 16:35:33 MSK (ветка: ci)
-7.0.2
-1abfac43 Merge branch 'XXXXX-3488' into 'dev'
-`,
+			want:    "project2 DEV 2026-09-24 16:35:33 MSK 7.0.2 1abfac43 Merge branch 'XXXXX-3488' into 'dev' (ветка: ci)\n",
 		},
 	}
 	for _, tt := range tests {
@@ -127,10 +112,7 @@ func TestRunShowsNoDeployments(t *testing.T) {
 			name:   "единственное окружение",
 			config: project2DevConfig,
 			gl:     noDevDeployments,
-			want: `project2
-DEV:
-нет деплоев
-`,
+			want:   "project2 DEV нет деплоев\n",
 		},
 		{
 			name: "после разделителя окружений",
@@ -141,18 +123,14 @@ DEV:
   }
 }`,
 			gl: noDevDeployments,
-			want: "project2\n" + project2DemoBlock + envSep + `DEV:
-нет деплоев
-`,
+			want: "project2 DEMO 2026-10-01 15:54:46 MSK 7.0.2 1abfac43 Merge branch 'XXXXX-3488' into 'dev'\n" +
+				"project2 DEV нет деплоев\n",
 		},
 		{
 			name:   "окружения нет в GitLab",
 			config: project2DevConfig,
 			gl:     noDevEnvironment,
-			want: `project2
-DEV:
-нет деплоев
-`,
+			want:   "project2 DEV нет деплоев\n",
 		},
 	}
 	for _, tt := range tests {

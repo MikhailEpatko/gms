@@ -311,46 +311,15 @@ const project2WithoutDemoConfig = `{
 }`
 
 const (
-	project2DevBlock = `DEV:
-2026-09-24 16:35:33 MSK
-7.0.2
-1abfac43 Merge branch 'XXXXX-3488' into 'dev'
-`
-	project2DemoBlock = `DEMO:
-2026-10-01 15:54:46 MSK
-7.0.2
-1abfac43 Merge branch 'XXXXX-3488' into 'dev'
-`
-	project2ProdBlock = `PROD:
-2026-10-05 11:38:34 MSK
-7.0.2
-1abfac43 Merge branch 'XXXXX-3488' into 'dev'
-`
-	project1DevBlock = `DEV:
-2026-10-16 19:31:34 MSK
-81.0.2
-f81c7da4 Merge branch 'XXXXX-3612' into 'dev'
-`
-	project1DemoBlock = `DEMO:
-2026-10-16 19:02:37 MSK
-75.3.0
-ad87e7d1 Merge branch 'XXXXX-3602-main' into 'demo'
-`
-	project1ProdBlock = `PROD:
-2026-10-16 09:21:17 MSK
-75.3.0
-eb9aad5d Merge branch 'XXXXX-3599' into 'demo'
-`
+	project2Dev  = "project2 DEV 2026-09-24 16:35:33 MSK 7.0.2 1abfac43 Merge branch 'XXXXX-3488' into 'dev'\n"
+	project2Demo = "project2 DEMO 2026-10-01 15:54:46 MSK 7.0.2 1abfac43 Merge branch 'XXXXX-3488' into 'dev'\n"
+	project2Prod = "project2 PROD 2026-10-05 11:38:34 MSK 7.0.2 1abfac43 Merge branch 'XXXXX-3488' into 'dev'\n"
+	project1Dev  = "project1 DEV 2026-10-16 19:31:34 MSK 81.0.2 f81c7da4 Merge branch 'XXXXX-3612' into 'dev'\n"
+	project1Demo = "project1 DEMO 2026-10-16 19:02:37 MSK 75.3.0 ad87e7d1 Merge branch 'XXXXX-3602-main' into 'demo'\n"
+	project1Prod = "project1 PROD 2026-10-16 09:21:17 MSK 75.3.0 eb9aad5d Merge branch 'XXXXX-3599' into 'demo'\n"
 )
 
 const (
-	envSep     = "\n---------------------------------------------------------------\n"
-	projectSep = "\n\n===============================================================\n"
-)
-
-const (
-	project2Dev = "project2\n" + project2DevBlock
-	project1Dev = "project1\n" + project1DevBlock
-	project2All = "project2\n" + project2DevBlock + envSep + project2DemoBlock + envSep + project2ProdBlock
-	project1All = "project1\n" + project1DevBlock + envSep + project1DemoBlock + envSep + project1ProdBlock
+	project2All = project2Dev + project2Demo + project2Prod
+	project1All = project1Dev + project1Demo + project1Prod
 )
