@@ -106,16 +106,9 @@ func Run(args []string, deps Deps) int {
 	f := formatter{w: deps.Stdout, loc: deps.Location}
 	anyPairFailed := false
 	pairIndex := 0
-	for i, p := range selected {
-		if i > 0 {
-			f.projectSeparator()
-		}
-		f.projectHeader(p.Code)
-		for j, env := range p.Environments {
-			if j > 0 {
-				f.envSeparator()
-			}
-			f.pair(env, results[pairIndex])
+	for _, p := range selected {
+		for _, env := range p.Environments {
+			f.pair(p.Code, env, results[pairIndex])
 			anyPairFailed = anyPairFailed || results[pairIndex].failed()
 			pairIndex++
 		}

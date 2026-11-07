@@ -22,103 +22,68 @@ func TestRunShowsPairErrorInPlace(t *testing.T) {
 		{
 			name:   "ошибка запроса текущих деплоев",
 			faults: glabFaults{deploymentsErr: errors.New("glab: 500 Internal Server Error")},
-			want: `project2
-DEV:
-ошибка: glab: 500 Internal Server Error
-` + projectSep + `project1
-DEV:
-ошибка: glab: 500 Internal Server Error
+			want: `project2 DEV ошибка: glab: 500 Internal Server Error
+project1 DEV ошибка: glab: 500 Internal Server Error
 `,
 		},
 		{
 			name:   "в ответе GitLab нет данных",
 			faults: glabFaults{nullData: true},
-			want: `project2
-DEV:
-ошибка: в ответе GitLab нет data
-` + projectSep + `project1
-DEV:
-ошибка: в ответе GitLab нет data
+			want: `project2 DEV ошибка: в ответе GitLab нет data
+project1 DEV ошибка: в ответе GitLab нет data
 `,
 		},
 		{
 			name: "проекта нет в GitLab",
 			gl:   fakeGitLab{"group/project1": testGitLab["group/project1"]},
-			want: `project2
-DEV:
-ошибка: проект group/project2 не найден в GitLab или к нему нет доступа
-` + projectSep + project1Dev,
+			want: "project2 DEV ошибка: проект group/project2 не найден в GitLab или к нему нет доступа\n" + project1Dev,
 		},
 		{
 			name:   "в деплое нет job",
 			config: project2AllConfig,
 			gl:     testGitLab.withDeployment("group/project2", "demo", "synthetic/last-deployment-no-job.json"),
-			want: "project2\n" + project2DevBlock + envSep + `DEMO:
-ошибка: в ответе GitLab нет job.finishedAt
-` + envSep + project2ProdBlock,
+			want:   project2Dev + "project2 DEMO ошибка: в ответе GitLab нет job.finishedAt\n" + project2Prod,
 		},
 		{
 			name:   "ошибка пары среди выбранных окружений",
 			config: project2AllConfig,
 			gl:     testGitLab.withDeployment("group/project2", "demo", "synthetic/last-deployment-no-job.json"),
 			args:   []string{"-e", "DEMO,PROD"},
-			want: `project2
-DEMO:
-ошибка: в ответе GitLab нет job.finishedAt
-` + envSep + project2ProdBlock,
+			want:   "project2 DEMO ошибка: в ответе GitLab нет job.finishedAt\n" + project2Prod,
 		},
 		{
 			name: "в деплое нет sha",
 			gl:   testGitLab.withDeployment("group/project2", "dev", "synthetic/last-deployment-no-sha.json"),
-			want: `project2
-DEV:
-ошибка: в ответе GitLab нет commit.sha
-` + projectSep + project1Dev,
+			want: "project2 DEV ошибка: в ответе GitLab нет commit.sha\n" + project1Dev,
 		},
 		{
 			name:   "ошибка запроса версий",
 			faults: glabFaults{versionsErr: errors.New("glab: 502 Bad Gateway")},
-			want: `project2
-DEV:
-2026-09-24 16:35:33 MSK
-версия: ошибка (glab: 502 Bad Gateway)
-1abfac43 Merge branch 'XXXXX-3488' into 'dev'
-` + projectSep + `project1
-DEV:
-2026-10-16 19:31:34 MSK
-версия: ошибка (glab: 502 Bad Gateway)
-f81c7da4 Merge branch 'XXXXX-3612' into 'dev'
+			want: `project2 DEV 2026-09-24 16:35:33 MSK версия: ошибка (glab: 502 Bad Gateway) 1abfac43 Merge branch 'XXXXX-3488' into 'dev'
+project1 DEV 2026-10-16 19:31:34 MSK версия: ошибка (glab: 502 Bad Gateway) f81c7da4 Merge branch 'XXXXX-3612' into 'dev'
 `,
 		},
 		{
 			name: "на коммите деплоя нет application.version",
 			gl:   noVersionFile,
-			want: `project2
-DEV:
-2026-09-24 16:35:33 MSK
-версия: ошибка (на коммите деплоя нет application.version)
-1abfac43 Merge branch 'XXXXX-3488' into 'dev'
-` + projectSep + project1Dev,
+			want: "project2 DEV 2026-09-24 16:35:33 MSK версия: ошибка (на коммите деплоя нет application.version) 1abfac43 Merge branch 'XXXXX-3488' into 'dev'\n" + project1Dev,
 		},
 		{
 			name: "в application.version нет build_version",
 			gl:   testGitLab.withVersion("group/project2", project2SHA, "synthetic/application.version-no-build-version"),
-			want: `project2
-DEV:
-2026-09-24 16:35:33 MSK
-версия: ошибка (в application.version нет build_version)
-1abfac43 Merge branch 'XXXXX-3488' into 'dev'
-` + projectSep + project1Dev,
+			want: "project2 DEV 2026-09-24 16:35:33 MSK версия: ошибка (в application.version нет build_version) 1abfac43 Merge branch 'XXXXX-3488' into 'dev'\n" + project1Dev,
 		},
 		{
 			name: "в application.version пустой build_version",
 			gl:   testGitLab.withVersion("group/project2", project2SHA, "synthetic/application.version-empty-build-version"),
-			want: `project2
-DEV:
-2026-09-24 16:35:33 MSK
-версия: ошибка (в application.version пустой build_version)
-1abfac43 Merge branch 'XXXXX-3488' into 'dev'
-` + projectSep + project1Dev,
+			want: "project2 DEV 2026-09-24 16:35:33 MSK версия: ошибка (в application.version пустой build_version) 1abfac43 Merge branch 'XXXXX-3488' into 'dev'\n" + project1Dev,
+		},
+		{
+			name:   "пометка у деплоя из MR с ошибкой версии",
+			faults: glabFaults{versionsErr: errors.New("glab: 502 Bad Gateway")},
+			gl:     testGitLab.withDeployment("group/project2", "dev", "synthetic/last-deployment-mr.json"),
+			want: "project2 DEV 2026-09-24 16:35:33 MSK версия: ошибка (glab: 502 Bad Gateway) 1abfac43 Merge branch 'XXXXX-3488' into 'dev' (MR !23)\n" +
+				"project1 DEV 2026-10-16 19:31:34 MSK версия: ошибка (glab: 502 Bad Gateway) f81c7da4 Merge branch 'XXXXX-3612' into 'dev'\n",
 		},
 	}
 	for _, tt := range tests {
