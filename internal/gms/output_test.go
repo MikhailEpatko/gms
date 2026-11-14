@@ -17,10 +17,10 @@ func TestRunShowsCurrentDeploymentOfProject(t *testing.T) {
 			config: project2DevConfig,
 			gl:     testGitLab,
 			args:   []string{"-p", "project2"},
-			want:   "project2 DEV 2026-09-24 16:35:33 MSK 7.0.2 1abfac43 Merge branch 'XXXXX-3488' into 'dev'\n",
+			want:   jsonReport(project2Dev),
 		},
 		{
-			name:   "окружения разделены линией",
+			name:   "все окружения проекта",
 			config: project2AllConfig,
 			gl:     testGitLab,
 			args:   []string{"-p", "project2"},
@@ -40,7 +40,7 @@ func TestRunShowsCurrentDeploymentOfProject(t *testing.T) {
 }`,
 			gl:   testGitLab,
 			args: []string{"-p", "project1"},
-			want: project1Prod + project1Dev + project1Demo,
+			want: jsonReport(project1Prod, project1Dev, project1Demo),
 		},
 		{
 			name: "проекты на разных хостах",
@@ -56,7 +56,7 @@ func TestRunShowsCurrentDeploymentOfProject(t *testing.T) {
 				"group/project2": onHost(testGitLab["group/project2"], "gitlab.example.com"),
 				"group/project1": onHost(testGitLab["group/project1"], "gitlab.example.org"),
 			},
-			want: project2Dev + project1Dev,
+			want: jsonReport(project2Dev, project1Dev),
 		},
 	}
 	for _, tt := range tests {
@@ -66,34 +66,25 @@ func TestRunShowsCurrentDeploymentOfProject(t *testing.T) {
 	}
 }
 
-func TestRunMarksDeploymentRef(t *testing.T) {
-	tests := []struct {
-		name    string
-		fixture string
-		want    string
-	}{
-		{
-			name:    "деплой из MR",
-			fixture: "synthetic/last-deployment-mr.json",
-			want:    "project2 DEV 2026-09-24 16:35:33 MSK 7.0.2 1abfac43 Merge branch 'XXXXX-3488' into 'dev' (MR !23)\n",
-		},
-		{
-			name:    "деплой из merged results pipeline MR",
-			fixture: "synthetic/last-deployment-mr-merge.json",
-			want:    "project2 DEV 2026-09-24 16:35:33 MSK 7.0.2 1abfac43 Merge branch 'XXXXX-3488' into 'dev' (MR !23)\n",
-		},
-		{
-			name:    "деплой из чужой ветки",
-			fixture: "synthetic/last-deployment-ci.json",
-			want:    "project2 DEV 2026-09-24 16:35:33 MSK 7.0.2 1abfac43 Merge branch 'XXXXX-3488' into 'dev' (ветка: ci)\n",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gl := testGitLab.withDeployment("group/project2", "dev", tt.fixture)
-			assertOutput(t, project2DevConfig, gl, []string{"-p", "project2"}, tt.want)
-		})
-	}
+const project2DevNoDeploys = `  {
+    "project": "project2",
+    "environment": "DEV",
+    "error": "Нет деплоев"
+  }`
+
+func TestRunKeepsTitleCharactersUnescaped(t *testing.T) {
+	gl := testGitLab.withDeployment("group/project2", "dev", "synthetic/last-deployment-title-html.json")
+	assertOutput(t, project2DevConfig, gl, []string{"-p", "project2"}, `[
+  {
+    "project": "project2",
+    "environment": "DEV",
+    "deployed_at": "2026-09-24T16:35:33+03:00",
+    "version": "7.0.2",
+    "commit": "1abfac43",
+    "title": "Fix <login> & retry"
+  }
+]
+`)
 }
 
 func TestRunShowsNoDeployments(t *testing.T) {
@@ -112,25 +103,24 @@ func TestRunShowsNoDeployments(t *testing.T) {
 			name:   "единственное окружение",
 			config: project2DevConfig,
 			gl:     noDevDeployments,
-			want:   "project2 DEV нет деплоев\n",
+			want:   jsonReport(project2DevNoDeploys),
 		},
 		{
-			name: "после разделителя окружений",
+			name: "несколько окружений, одно без деплоев",
 			config: `{
   "project2": {
     "DEMO": "https://gitlab.example.com/group/project2/-/tree/demo",
     "DEV": "https://gitlab.example.com/group/project2/-/tree/dev"
   }
 }`,
-			gl: noDevDeployments,
-			want: "project2 DEMO 2026-10-01 15:54:46 MSK 7.0.2 1abfac43 Merge branch 'XXXXX-3488' into 'dev'\n" +
-				"project2 DEV нет деплоев\n",
+			gl:   noDevDeployments,
+			want: jsonReport(project2Demo, project2DevNoDeploys),
 		},
 		{
 			name:   "окружения нет в GitLab",
 			config: project2DevConfig,
 			gl:     noDevEnvironment,
-			want:   "project2 DEV нет деплоев\n",
+			want:   jsonReport(project2DevNoDeploys),
 		},
 	}
 	for _, tt := range tests {

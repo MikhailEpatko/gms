@@ -27,10 +27,42 @@ const ninePairsConfig = `{
   }
 }`
 
-const project3All = `project3 DEV 2026-09-24 16:35:33 MSK 7.0.2 1abfac43 Merge branch 'XXXXX-3488' into 'dev'
-project3 DEMO 2026-10-01 15:54:46 MSK 7.0.2 1abfac43 Merge branch 'XXXXX-3488' into 'dev'
-project3 PROD 2026-10-05 11:38:34 MSK 7.0.2 1abfac43 Merge branch 'XXXXX-3488' into 'dev'
-`
+const project3Dev = `  {
+    "project": "project3",
+    "environment": "DEV",
+    "deployed_at": "2026-09-24T16:35:33+03:00",
+    "version": "7.0.2",
+    "commit": "1abfac43",
+    "title": "Merge branch 'XXXXX-3488' into 'dev'"
+  }`
+
+const project3Demo = `  {
+    "project": "project3",
+    "environment": "DEMO",
+    "deployed_at": "2026-10-01T15:54:46+03:00",
+    "version": "7.0.2",
+    "commit": "1abfac43",
+    "title": "Merge branch 'XXXXX-3488' into 'dev'"
+  }`
+
+const project3Prod = `  {
+    "project": "project3",
+    "environment": "PROD",
+    "deployed_at": "2026-10-05T11:38:34+03:00",
+    "version": "7.0.2",
+    "commit": "1abfac43",
+    "title": "Merge branch 'XXXXX-3488' into 'dev'"
+  }`
+
+const project1DemoNoJob = `  {
+    "project": "project1",
+    "environment": "DEMO",
+    "error": "в ответе GitLab нет job.finishedAt"
+  }`
+
+const ninePairs = "[\n" + project2Dev + ",\n" + project2Demo + ",\n" + project2Prod + ",\n" +
+	project1Dev + ",\n" + project1Demo + ",\n" + project1Prod + ",\n" +
+	project3Dev + ",\n" + project3Demo + ",\n" + project3Prod + "\n]\n"
 
 func queryKind(args []string) string {
 	if strings.Contains(strings.Join(args, " "), "environment(") {
@@ -96,9 +128,10 @@ func TestRunBatchesRequests(t *testing.T) {
 		want      string
 		wantCalls int32
 	}{
-		{name: "одна пара", config: project2DevConfig, want: project2Dev, wantCalls: 2},
-		{name: "шесть пар двух проектов", config: allPairsConfig, want: project2All + project1All, wantCalls: 2},
-		{name: "девять пар: на одну больше пачки, у project3 пути проекта project2", config: ninePairsConfig, want: project2All + project1All + project3All,
+		{name: "одна пара", config: project2DevConfig, want: jsonReport(project2Dev), wantCalls: 2},
+		{name: "шесть пар двух проектов", config: allPairsConfig,
+			want: jsonReport(project2Dev, project2Demo, project2Prod, project1Dev, project1Demo, project1Prod), wantCalls: 2},
+		{name: "девять пар: на одну больше пачки, у project3 пути проекта project2", config: ninePairsConfig, want: ninePairs,
 			wantCalls: 4},
 	}
 	for _, tt := range tests {
@@ -129,14 +162,14 @@ func TestRunKeepsOutputOrderWhenAnswersComeReversed(t *testing.T) {
 			name:     "все пары успешны",
 			gl:       testGitLab,
 			wantCode: 0,
-			want:     project2All + project1All + project3All,
+			want:     ninePairs,
 		},
 		{
 			name:     "ошибка пары",
 			gl:       testGitLab.withDeployment("group/project1", "demo", "synthetic/last-deployment-no-job.json"),
 			wantCode: 1,
-			want: project2All + project1Dev + "project1 DEMO ошибка: в ответе GitLab нет job.finishedAt\n" +
-				project1Prod + project3All,
+			want: jsonReport(project2Dev, project2Demo, project2Prod, project1Dev, project1DemoNoJob, project1Prod,
+				project3Dev, project3Demo, project3Prod),
 		},
 	}
 	for _, tt := range tests {
@@ -149,7 +182,6 @@ func TestRunKeepsOutputOrderWhenAnswersComeReversed(t *testing.T) {
 }
 
 func TestRunRequestsBatchesConcurrently(t *testing.T) {
-	glab := barrierGlab(fakeGlab(t, testGitLab, glabFaults{}), 2)
-	code, stdout, stderr := runWithEnv(t, configEnv(t, ninePairsConfig), glab, nil)
-	assertResult(t, code, stdout, stderr, 0, project2All+project1All+project3All, "")
+	code, stdout, stderr := runWithEnv(t, configEnv(t, ninePairsConfig), barrierGlab(fakeGlab(t, testGitLab, glabFaults{}), 2), nil)
+	assertResult(t, code, stdout, stderr, 0, ninePairs, "")
 }

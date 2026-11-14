@@ -3,4 +3,4 @@
 /gms
 /.claude/settings.local.json
 /.zcode/
-/release.md
+/release.sh

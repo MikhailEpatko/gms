@@ -1,5 +1,7 @@
 Задача 11:
 
+Выполнена.
+
 Вынести программу проверки комментариев `scripts/nocomments` в самостоятельное приложение со своим репозиторием,
 тестами и документацией, установить его и переключить `scripts/check.sh` на установленную программу.
 
@@ -21,7 +23,7 @@
   уходит в Considered Options.
 
 Что ещё обновить в gms: удалить `scripts/nocomments/`; README «Сборка из клона» (установка рядом с gitleaks);
-`CLAUDE.md`; `CODING_STANDARDS.md` («Один seam», «Комментарии»); `ai/4/task.md` (CI ставит nocomments);
+`AGENTS.md`; `CODING_STANDARDS.md` («Один seam», «Комментарии»); `ai/4/task.md` (CI ставит nocomments);
 `ai/10/spec.md` (решение «пакет `main` в `scripts`» заменено задачей 11).
 
 Связи: задача 10 (проверка комментариев), задача 4 (CI), ADR 0004 (hook запускает `check.sh` на копии индекса).
