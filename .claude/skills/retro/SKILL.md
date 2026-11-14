@@ -12,6 +12,8 @@ The user has asked for a **retrospective**. You are suggesting improvements to t
 
 2. Read the primary sources for the session the user specifies. This may mean searching through session logs on this machine. If the user doesn't specify a session, default to the current one.
 
+**Session log location and format** (don't rediscover this): ZCode writes each session to `~/.zcode/cli/rollout/model-io-sess_<session-id>.jsonl`. Each JSONL line is one API call; `request.messages` is the cumulative conversation and `response` carries `text` plus `toolCalls`. The **last line of the file holds the whole session** — parse it and extract user messages, assistant text, and tool calls from there; never re-parse the file line by line.
+
 3. Look for candidates for improvement in these categories.
 
 - **Navigation**: how easy was it for the agent to find the right files? Are there hidden dependencies between files? Would a **navigation pointer** make it easier? _Use when_ the session took a long time to find a piece of information.
@@ -38,7 +40,7 @@ This means that the review agent should be responsible for imposing coding stand
 
 You have access to several files in the repo:
 
-- `CLAUDE.md`/`AGENTS.md`: these files are pushed to the context window of any agent working in this repo. They should be used incredibly sparingly, usually only for **navigation pointers** to other files.
+- `AGENTS.md`/`AGENTS.md`: these files are pushed to the context window of any agent working in this repo. They should be used incredibly sparingly, usually only for **navigation pointers** to other files.
 - `CODING_STANDARDS.md`: this file is read during review, not implementation. Add **navigation pointers** to docs folders if the standards file gets more than 1,000 lines long.
 - Docs: use docs as references files, pointed to by other files. Look for existing docs before writing new ones.
 - Skills: use skills for docs (since their description goes into the agent's context window), or for user-invoked commands. Follow the advice in the `writing-for-agents` skill.

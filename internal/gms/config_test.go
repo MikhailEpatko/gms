@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 )
 
@@ -43,8 +44,9 @@ func TestRunAsksToCreateMissingConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			code, stdout, stderr := runWithEnv(t, tt.env, forbiddenGlab(t), nil)
-			assertResult(t, code, stdout, stderr, 1, "",
-				"gms: нет файла конфига, создайте "+tt.wantPath+"\nпример:\n"+wantExampleConfig)
+			wantStderr := "{\"error\":\"нет файла конфига\",\"path\":" + strconv.Quote(tt.wantPath) +
+				",\"example\":" + strconv.Quote(wantExampleConfig) + "}\n"
+			assertResult(t, code, stdout, stderr, 1, "", wantStderr)
 			if _, err := os.Stat(filepath.Dir(tt.wantPath)); !errors.Is(err, os.ErrNotExist) {
 				t.Errorf("каталог конфига создан или недоступен: %v", err)
 			}
@@ -54,14 +56,14 @@ func TestRunAsksToCreateMissingConfig(t *testing.T) {
 
 func TestRunExampleConfigIsValid(t *testing.T) {
 	code, stdout, stderr := runWithEnv(t, configEnv(t, wantExampleConfig), forbiddenGlab(t), []string{"-p", "foo"})
-	assertResult(t, code, stdout, stderr, 2, "", "gms: неизвестный код проекта: foo\nизвестные коды: project1, project2\n")
+	assertResult(t, code, stdout, stderr, 2, "", "{\"error\":\"неизвестный код проекта: foo\",\"known\":[\"project1\",\"project2\"]}\n")
 }
 
 func TestRunNeedsHomeWithoutGmsConfig(t *testing.T) {
 	for _, args := range [][]string{nil, {"-c"}} {
 		t.Run(fmt.Sprint(args), func(t *testing.T) {
 			code, stdout, stderr := runWithEnv(t, nil, forbiddenGlab(t), args)
-			assertResult(t, code, stdout, stderr, 1, "", "gms: не удалось определить домашний каталог, укажите путь к конфигу в GMS_CONFIG\n")
+			assertResult(t, code, stdout, stderr, 1, "", "{\"error\":\"не удалось определить домашний каталог, укажите путь к конфигу в GMS_CONFIG\"}\n")
 		})
 	}
 }
@@ -154,7 +156,7 @@ func TestRunRejectsInvalidConfig(t *testing.T) {
 			if tt.wantLine > 0 {
 				where += fmt.Sprintf(":%d", tt.wantLine)
 			}
-			assertResult(t, code, stdout, stderr, 1, "", "gms: некорректный конфиг "+where+": "+tt.wantErr+"\n")
+			assertResult(t, code, stdout, stderr, 1, "", "{\"error\":"+strconv.Quote("некорректный конфиг "+where+": "+tt.wantErr)+"}\n")
 		})
 	}
 }

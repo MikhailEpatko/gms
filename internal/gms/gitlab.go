@@ -16,7 +16,6 @@ const batchSize = 8
 var errNotLoggedIn = errors.New("GitLab не узнал пользователя glab")
 
 type Deployment struct {
-	Ref        string
 	SHA        string
 	FinishedAt time.Time
 	ShortID    string
@@ -162,7 +161,7 @@ func (g gitlab) currentDeployments(envs []Environment) ([]deploymentResult, erro
 	q.WriteString("query { currentUser { username }")
 	for i, env := range envs {
 		_, _ = fmt.Fprintf(&q, " %s: project(fullPath: %s) { e: environment(name: %s) {"+
-			" lastDeployment(status: SUCCESS) { ref commit { sha shortId title } job { finishedAt } } } }",
+			" lastDeployment(status: SUCCESS) { commit { sha shortId title } job { finishedAt } } } }",
 			projectAlias(i), graphqlString(env.ProjectPath), graphqlString(strings.ToLower(env.Name)))
 	}
 	q.WriteString(" }")
@@ -178,7 +177,6 @@ func (g gitlab) currentDeployments(envs []Environment) ([]deploymentResult, erro
 		var project *struct {
 			Environment *struct {
 				LastDeployment *struct {
-					Ref    string `json:"ref"`
 					Commit *struct {
 						SHA     string `json:"sha"`
 						ShortID string `json:"shortId"`
@@ -209,7 +207,6 @@ func (g gitlab) currentDeployments(envs []Environment) ([]deploymentResult, erro
 			results[i].err = errors.New("в ответе GitLab нет job.finishedAt")
 		default:
 			results[i].deployment = &Deployment{
-				Ref:        d.Ref,
 				SHA:        d.Commit.SHA,
 				FinishedAt: d.Job.FinishedAt,
 				ShortID:    d.Commit.ShortID,

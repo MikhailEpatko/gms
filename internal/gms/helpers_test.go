@@ -310,16 +310,69 @@ const project2WithoutDemoConfig = `{
   }
 }`
 
-const (
-	project2Dev  = "project2 DEV 2026-09-24 16:35:33 MSK 7.0.2 1abfac43 Merge branch 'XXXXX-3488' into 'dev'\n"
-	project2Demo = "project2 DEMO 2026-10-01 15:54:46 MSK 7.0.2 1abfac43 Merge branch 'XXXXX-3488' into 'dev'\n"
-	project2Prod = "project2 PROD 2026-10-05 11:38:34 MSK 7.0.2 1abfac43 Merge branch 'XXXXX-3488' into 'dev'\n"
-	project1Dev  = "project1 DEV 2026-10-16 19:31:34 MSK 81.0.2 f81c7da4 Merge branch 'XXXXX-3612' into 'dev'\n"
-	project1Demo = "project1 DEMO 2026-10-16 19:02:37 MSK 75.3.0 ad87e7d1 Merge branch 'XXXXX-3602-main' into 'demo'\n"
-	project1Prod = "project1 PROD 2026-10-16 09:21:17 MSK 75.3.0 eb9aad5d Merge branch 'XXXXX-3599' into 'demo'\n"
-)
+func jsonReport(pairs ...string) string {
+	doc := "[\n" + strings.Join(pairs, ",\n") + "\n]\n"
+	if !json.Valid([]byte(doc)) {
+		panic("невалидный JSON в ожиданиях теста:\n" + doc)
+	}
+	return doc
+}
+
+const project2Dev = `  {
+    "project": "project2",
+    "environment": "DEV",
+    "deployed_at": "2026-09-24T16:35:33+03:00",
+    "version": "7.0.2",
+    "commit": "1abfac43",
+    "title": "Merge branch 'XXXXX-3488' into 'dev'"
+  }`
+
+const project2Demo = `  {
+    "project": "project2",
+    "environment": "DEMO",
+    "deployed_at": "2026-10-01T15:54:46+03:00",
+    "version": "7.0.2",
+    "commit": "1abfac43",
+    "title": "Merge branch 'XXXXX-3488' into 'dev'"
+  }`
+
+const project2Prod = `  {
+    "project": "project2",
+    "environment": "PROD",
+    "deployed_at": "2026-10-05T11:38:34+03:00",
+    "version": "7.0.2",
+    "commit": "1abfac43",
+    "title": "Merge branch 'XXXXX-3488' into 'dev'"
+  }`
+
+const project1Dev = `  {
+    "project": "project1",
+    "environment": "DEV",
+    "deployed_at": "2026-10-16T19:31:34+03:00",
+    "version": "81.0.2",
+    "commit": "f81c7da4",
+    "title": "Merge branch 'XXXXX-3612' into 'dev'"
+  }`
+
+const project1Demo = `  {
+    "project": "project1",
+    "environment": "DEMO",
+    "deployed_at": "2026-10-16T19:02:37+03:00",
+    "version": "75.3.0",
+    "commit": "ad87e7d1",
+    "title": "Merge branch 'XXXXX-3602-main' into 'demo'"
+  }`
+
+const project1Prod = `  {
+    "project": "project1",
+    "environment": "PROD",
+    "deployed_at": "2026-10-16T09:21:17+03:00",
+    "version": "75.3.0",
+    "commit": "eb9aad5d",
+    "title": "Merge branch 'XXXXX-3599' into 'demo'"
+  }`
 
 const (
-	project2All = project2Dev + project2Demo + project2Prod
-	project1All = project1Dev + project1Demo + project1Prod
+	project2All = "[\n" + project2Dev + ",\n" + project2Demo + ",\n" + project2Prod + "\n]\n"
+	project1All = "[\n" + project1Dev + ",\n" + project1Demo + ",\n" + project1Prod + "\n]\n"
 )

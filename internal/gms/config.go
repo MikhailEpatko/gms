@@ -22,7 +22,6 @@ type Environment struct {
 	Name        string
 	Host        string
 	ProjectPath string
-	Branch      string
 }
 
 func configPath(getenv func(string) string, homeDir func() (string, error)) (string, error) {
@@ -139,5 +138,5 @@ func parseBranchURL(raw string) (Environment, error) {
 	if u.Scheme != "https" || u.Host == "" || !ok || !strings.Contains(projectPath, "/") || branch == "" {
 		return Environment{}, fmt.Errorf("URL %q не вида https://<host>/<group>/<repo>/-/tree/<branch>", raw)
 	}
-	return Environment{Host: u.Host, ProjectPath: projectPath, Branch: branch}, nil
+	return Environment{Host: u.Host, ProjectPath: projectPath}, nil
 }

@@ -1,54 +1,63 @@
 package gms
 
 import (
+	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"os/exec"
 	"strings"
 	"time"
 )
 
-const dateLayout = "2006-01-02 15:04:05 MST"
-
-type formatter struct {
-	w   io.Writer
-	loc *time.Location
+type pairReport struct {
+	Project     string     `json:"project"`
+	Environment string     `json:"environment"`
+	DeployedAt  *time.Time `json:"deployed_at,omitempty"`
+	Version     string     `json:"version,omitempty"`
+	Commit      string     `json:"commit,omitempty"`
+	Title       string     `json:"title,omitempty"`
+	Error       string     `json:"error,omitempty"`
 }
 
-func (f formatter) pair(code string, env Environment, r pairResult) {
+func newPairReport(code, name string, r pairResult, loc *time.Location) pairReport {
+	report := pairReport{Project: code, Environment: name}
 	switch {
 	case r.deploymentErr != nil:
-		_, _ = fmt.Fprintf(f.w, "%s %s ошибка: %s\n", code, env.Name, r.deploymentErr)
+		report.Error = r.deploymentErr.Error()
 	case r.deployment == nil:
-		_, _ = fmt.Fprintf(f.w, "%s %s нет деплоев\n", code, env.Name)
+		report.Error = "Нет деплоев"
 	default:
 		d := r.deployment
-		version := r.version
+		finishedAt := d.FinishedAt.In(loc)
+		report.DeployedAt = &finishedAt
+		report.Commit = d.ShortID
+		report.Title = d.Title
 		if r.versionErr != nil {
-			version = "версия: ошибка (" + r.versionErr.Error() + ")"
+			report.Error = r.versionErr.Error()
+		} else {
+			report.Version = r.version
 		}
-		_, _ = fmt.Fprintf(f.w, "%s %s %s %s %s %s%s\n",
-			code, env.Name, d.FinishedAt.In(f.loc).Format(dateLayout), version, d.ShortID, d.Title, d.mark(env.Branch))
 	}
+	return report
 }
 
-func (d Deployment) mark(branch string) string {
-	if mr, ok := strings.CutPrefix(d.Ref, "refs/merge-requests/"); ok {
-		if n, kind, ok := strings.Cut(mr, "/"); ok && (kind == "head" || kind == "merge") {
-			return " (MR !" + n + ")"
-		}
-	}
-	if d.Ref == branch {
-		return ""
-	}
-	return " (ветка: " + d.Ref + ")"
+func jsonEncoder(w io.Writer) *json.Encoder {
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	return enc
+}
+
+func writeReport(w io.Writer, report []pairReport) {
+	enc := jsonEncoder(w)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(report)
 }
 
 const usage = `использование: gms [-p код,код] [-e имя,имя] [-c]
 
 Показывает текущий деплой каждого окружения проектов из конфига:
 дату деплоя, версию приложения и коммит деплоя.
+Вывод — JSON: отчёт в stdout, ошибки и подсказки в stderr.
 
   -p код,код  только перечисленные проекты, в порядке аргументов
   -e имя,имя  только перечисленные окружения, в порядке аргументов, регистр не важен
@@ -71,16 +80,30 @@ const exampleConfig = `{
 }
 `
 
+type message struct {
+	Error   string   `json:"error,omitempty"`
+	Hint    string   `json:"hint,omitempty"`
+	Usage   string   `json:"usage,omitempty"`
+	Config  string   `json:"config,omitempty"`
+	Path    string   `json:"path,omitempty"`
+	Example string   `json:"example,omitempty"`
+	Known   []string `json:"known,omitempty"`
+}
+
+func writeMessage(w io.Writer, m message) {
+	_ = jsonEncoder(w).Encode(m)
+}
+
 type reporter struct {
 	w io.Writer
 }
 
 func (r reporter) failure(err error) {
-	_, _ = fmt.Fprintln(r.w, "gms:", err)
+	writeMessage(r.w, message{Error: err.Error()})
 }
 
 func (r reporter) usageError(err error) {
-	_, _ = fmt.Fprintf(r.w, "gms: %v\n%s", err, usage)
+	writeMessage(r.w, message{Error: err.Error(), Usage: usage})
 }
 
 func (r reporter) extraArgs(extra, codes, envNames []string) {
@@ -95,19 +118,28 @@ func (r reporter) extraArgs(extra, codes, envNames []string) {
 			what = "коды проектов и окружения"
 		}
 	}
-	_, _ = fmt.Fprintf(r.w, "gms: лишние аргументы: %s\n%s перечисляются через запятую: %s\n", strings.Join(extra, " "), what, cmd)
+	writeMessage(r.w, message{
+		Error: "лишние аргументы: " + strings.Join(extra, " "),
+		Hint:  what + " перечисляются через запятую: " + cmd,
+	})
 }
 
 func (r reporter) emptyCodes() {
-	_, _ = fmt.Fprintln(r.w, "gms: в -p не указан ни один код проекта, пример: -p project1,project3")
+	writeMessage(r.w, message{
+		Error: "в -p не указан ни один код проекта",
+		Hint:  "пример: -p project1,project3",
+	})
 }
 
 func (r reporter) emptyEnvNames() {
-	_, _ = fmt.Fprintln(r.w, "gms: в -e не указано ни одно окружение, пример: -e DEV,DEMO")
+	writeMessage(r.w, message{
+		Error: "в -e не указано ни одно окружение",
+		Hint:  "пример: -e DEV,DEMO",
+	})
 }
 
 func (r reporter) missingConfig(path string) {
-	_, _ = fmt.Fprintf(r.w, "gms: нет файла конфига, создайте %s\nпример:\n%s", path, exampleConfig)
+	writeMessage(r.w, message{Error: "нет файла конфига", Path: path, Example: exampleConfig})
 }
 
 func (r reporter) unknownCodes(projects []Project, unknown []string) {
@@ -116,17 +148,17 @@ func (r reporter) unknownCodes(projects []Project, unknown []string) {
 		known[i] = p.Code
 	}
 	label := plural(len(unknown), "неизвестный код проекта", "неизвестные коды проектов")
-	_, _ = fmt.Fprintf(r.w, "gms: %s: %s\nизвестные коды: %s\n", label, strings.Join(unknown, ", "), strings.Join(known, ", "))
+	writeMessage(r.w, message{Error: label + ": " + strings.Join(unknown, ", "), Known: known})
 }
 
 func (r reporter) unknownEnvNames(known, unknown []string) {
 	label := plural(len(unknown), "неизвестное окружение", "неизвестные окружения")
-	_, _ = fmt.Fprintf(r.w, "gms: %s: %s\nизвестные окружения: %s\n", label, strings.Join(unknown, ", "), strings.Join(known, ", "))
+	writeMessage(r.w, message{Error: label + ": " + strings.Join(unknown, ", "), Known: known})
 }
 
 func (r reporter) noSelectedEnvs(codes, names []string) {
-	_, _ = fmt.Fprintf(r.w, "gms: у %s %s нет %s %s\n", plural(len(codes), "проекта", "проектов"), strings.Join(codes, ", "),
-		plural(len(names), "окружения", "окружений"), strings.Join(names, ", "))
+	writeMessage(r.w, message{Error: "у " + plural(len(codes), "проекта", "проектов") + " " + strings.Join(codes, ", ") +
+		" нет " + plural(len(names), "окружения", "окружений") + " " + strings.Join(names, ", ")})
 }
 
 func plural(n int, one, many string) string {
@@ -138,10 +170,14 @@ func plural(n int, one, many string) string {
 
 func (r reporter) glabUnusable(host string, err error) {
 	if errors.Is(err, exec.ErrNotFound) {
-		_, _ = fmt.Fprintf(r.w, "gms: glab не найден, установите его: https://gitlab.com/gitlab-org/cli\n"+
-			"затем выполните: glab auth login --hostname %s\n", host)
+		writeMessage(r.w, message{
+			Error: "glab не найден",
+			Hint:  "установите его: https://gitlab.com/gitlab-org/cli, затем выполните: glab auth login --hostname " + host,
+		})
 		return
 	}
-	_, _ = fmt.Fprintf(r.w, "gms: glab не прошёл проверку входа в %s: %v\n"+
-		"выполните: glab auth login --hostname %s\n", host, err, host)
+	writeMessage(r.w, message{
+		Error: "glab не прошёл проверку входа в " + host + ": " + err.Error(),
+		Hint:  "выполните: glab auth login --hostname " + host,
+	})
 }

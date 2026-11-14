@@ -3,7 +3,6 @@ package gms
 import (
 	"errors"
 	"flag"
-	"fmt"
 	"io"
 	"os"
 	"slices"
@@ -29,7 +28,7 @@ func Run(args []string, deps Deps) int {
 			rep.failure(err)
 			return 1
 		}
-		_, _ = fmt.Fprintln(deps.Stdout, path)
+		writeMessage(deps.Stdout, message{Config: path})
 		return 0
 	}
 
@@ -41,7 +40,7 @@ func Run(args []string, deps Deps) int {
 	fs.Var(&envNames, "e", "")
 	fs.Bool("c", false, "")
 	if err := fs.Parse(args); errors.Is(err, flag.ErrHelp) {
-		_, _ = fmt.Fprint(deps.Stdout, usage)
+		writeMessage(deps.Stdout, message{Usage: usage})
 		return 0
 	} else if err != nil {
 		rep.usageError(err)
@@ -103,16 +102,17 @@ func Run(args []string, deps Deps) int {
 		return 1
 	}
 
-	f := formatter{w: deps.Stdout, loc: deps.Location}
+	report := make([]pairReport, 0, len(outputPairs))
 	anyPairFailed := false
 	pairIndex := 0
 	for _, p := range selected {
 		for _, env := range p.Environments {
-			f.pair(p.Code, env, results[pairIndex])
+			report = append(report, newPairReport(p.Code, env.Name, results[pairIndex], deps.Location))
 			anyPairFailed = anyPairFailed || results[pairIndex].failed()
 			pairIndex++
 		}
 	}
+	writeReport(deps.Stdout, report)
 	if anyPairFailed {
 		return 1
 	}
